@@ -33,36 +33,31 @@ export interface AppConfig {
 }
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
-  companyName: 'Murf AI',
-  pageTitle: 'Voice Agent Starter',
-  pageDescription: 'A voice agent powered by Murf Falcon — the fastest TTS API',
+  companyName: 'Aarogya Saathi',
+  pageTitle: 'Aarogya Saathi · Bharat ka voice health saathi',
+  pageDescription:
+    'Aarogya Saathi — ek Hinglish voice health helper for chhote sheher aur gaon. Symptoms samjho, home-care aur PHC guidance lo, Ayushman Bharat jaisi schemes jaano. Doctor ka replacement nahi.',
 
   supportsChatInput: true,
-  supportsVideoInput: true,
-  supportsScreenShare: true,
+  // Voice + text only — a phone health call has no use for camera/screen-share,
+  // and dropping them keeps the chat UI clean and avoids extra device prompts.
+  supportsVideoInput: false,
+  supportsScreenShare: false,
   isPreConnectBufferEnabled: true,
 
-  logo: '/murf-logo.svg',
-  accent: '#6366F1',
-  logoDark: '/murf-logo-dark.svg',
-  accentDark: '#818cf8',
-  startButtonText: 'Start talking',
+  // Header uses a text wordmark (see app/layout.tsx), so no logo image is needed.
+  logo: '',
+  logoDark: '',
+  // Marigold / saffron — warm, trustworthy, distinctly Indian (injected as --primary).
+  accent: '#E8853A',
+  accentDark: '#F2A65A',
+  startButtonText: 'Baat shuru karein',
 
-  // optional: audio visualization configuration
-  // audioVisualizerType: 'bar',
-  // audioVisualizerColor: '#002cf2',
-  // audioVisualizerColorDark: '#1fd5f9',
-  // audioVisualizerColorShift: 0.3,
-  // audioVisualizerBarCount: 5,
-  // audioVisualizerType: 'radial',
-  // audioVisualizerRadialBarCount: 24,
-  // audioVisualizerRadialRadius: 100,
-  // audioVisualizerType: 'grid',
-  // audioVisualizerGridRowCount: 25,
-  // audioVisualizerGridColumnCount: 25,
-  // audioVisualizerType: 'wave',
-  // audioVisualizerWaveLineWidth: 3,
-  // audioVisualizerType: 'aura',
+  // Warm saffron bar visualizer to match the editorial theme.
+  audioVisualizerType: 'bar',
+  audioVisualizerColor: '#E8853A',
+  audioVisualizerColorDark: '#F2A65A',
+  audioVisualizerBarCount: 7,
 
   // agent dispatch configuration
   agentName: process.env.AGENT_NAME ?? undefined,

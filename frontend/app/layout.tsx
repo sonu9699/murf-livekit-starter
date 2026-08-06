@@ -71,38 +71,21 @@ export default async function RootLayout({ children }: RootLayoutProps) {
           enableSystem
           disableTransitionOnChange
         >
-          <header className="fixed top-0 left-0 z-50 hidden w-full flex-row justify-between p-6 md:flex">
-            <a
-              target="_blank"
-              rel="noopener noreferrer"
-              href="https://livekit.io"
-              className="scale-100 transition-transform duration-300 hover:scale-110"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={logo} alt={`${companyName} Logo`} className="block size-6 dark:hidden" />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={logoDark ?? logo}
-                alt={`${companyName} Logo`}
-                className="hidden size-6 dark:block"
-              />
-            </a>
-            <span className="text-foreground font-mono text-xs font-bold tracking-wider uppercase">
-              Built with{' '}
-              <a
-                target="_blank"
-                rel="noopener noreferrer"
-                href="https://docs.livekit.io/agents"
-                className="underline underline-offset-4"
-              >
-                LiveKit Agents
-              </a>
+          <header className="fixed top-0 left-0 z-50 flex w-full flex-row items-center justify-between p-4 md:p-6">
+            <div className="flex items-center gap-2.5">
+              <span className="bg-primary size-3 rounded-[3px]" aria-hidden />
+              <span className="font-display text-lg leading-none font-light tracking-tight">
+                {companyName}
+              </span>
+            </div>
+            <span className="text-muted-foreground hidden font-mono text-[0.7rem] font-medium tracking-[0.2em] uppercase md:inline">
+              Bharat ka voice health saathi
             </span>
           </header>
 
           {children}
-          <div className="group fixed bottom-0 left-1/2 z-50 mb-2 -translate-x-1/2">
-            <ThemeToggle className="translate-y-20 transition-transform delay-150 duration-300 group-hover:translate-y-0" />
+          <div className="group fixed bottom-0 left-1/2 z-50 mb-[max(0.5rem,env(safe-area-inset-bottom))] -translate-x-1/2">
+            <ThemeToggle className="translate-y-0 transition-transform delay-150 duration-300 md:translate-y-20 md:group-hover:translate-y-0" />
           </div>
         </ThemeProvider>
       </body>
