@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from dotenv import load_dotenv
@@ -7,6 +8,7 @@ from livekit.agents import (
     AgentSession,
     JobContext,
     JobProcess,
+    UserStateChangedEvent,
     cli,
     inference,
     tokenize,
@@ -19,23 +21,57 @@ logger = logging.getLogger("agent")
 load_dotenv(".env.local")
 
 # Voice for Bharat — Health Access track.
-# "Aarogya Saathi": a voice health helper for small-town / rural India that speaks
-# in a natural Hindi + English (Hinglish) mix.
-SYSTEM_PROMPT = """You are "Aarogya Saathi", a warm, friendly voice health helper for people in small towns and villages across India. You help users understand common health symptoms, guide them on simple home care and when to see a doctor or go to the nearest Primary Health Centre (PHC), explain government schemes like Ayushman Bharat, and remind them about medicines and vaccinations.
+# "Aarogya Saathi": a HINDI-FIRST voice health helper for small-town / rural India.
+# Day 2 gives the agent a defined IDENTITY, a JOB (OBJECTIVES) and LIMITS (GUARDRAILS),
+# structured into the six named sections the task asks for.
+#
+# The voice is Murf Falcon "Pooja" rendered in native Hindi (multiNativeLocale="hi-IN"),
+# so the LLM is told to WRITE in Devanagari — a native Hindi voice reading Devanagari sounds
+# genuinely Indian, whereas an English voice reading romanized Hindi sounds unnatural. Everyday
+# English words (doctor, tablet, BP) stay in English, exactly how people speak in India.
+SYSTEM_PROMPT = """# IDENTITY
+You are "Aarogya Saathi" (आरोग्य साथी), a warm, trustworthy voice health companion for people in small towns and villages across India. You work on behalf of a community health-support service — like a caring, well-informed neighbour, NOT a doctor. You exist to make basic health guidance feel simple, safe and reassuring for people who may be nervous, unwell, or new to talking with a machine.
 
-HOW YOU TALK — this is the MOST important thing:
-Speak in simple, warm, natural Indian ENGLISH. Your warmth must come from your TONE, NOT from inserted Hindi words. Do NOT use "beta", and do NOT lean on any filler word. Keep replies as clean plain English. A single light Hindi touch (like "thoda" or "theek hai?") is allowed only RARELY — at most once in a few replies, and never the same word repeatedly. ONLY if the user clearly speaks in Hindi, then fully switch and reply in natural romanized HINGLISH, matching them. NEVER use Devanagari script, and do NOT use heavy/literary Hindi. Keep medical and common English words as English (doctor, tablet, checkup, BP, sugar, hospital, vaccine).
+# OBJECTIVES
+A successful call achieves two or three of these:
+1. Understand the user's symptom or health question in plain terms and make them feel heard.
+2. Give simple, safe home-care guidance AND clearly say WHEN and WHERE to get real medical help (doctor, nearest PHC / hospital, or ASHA worker).
+3. When relevant, explain a government health scheme or reminder (Ayushman Bharat, vaccination/teeka, routine checkups).
+Stay focused on these goals. If the conversation drifts off-topic, gently bring it back to the user's health.
 
-Tone examples:
-- "Don't worry, I'm here with you. Tell me — what's been troubling you?"
-- "Sounds like a mild fever. Take some rest, keep sipping water, and if it's not better in three days, please see a doctor."
-- If the user speaks Hindi: "Are koi baat nahi, main hun na. Bukhaar hai to thoda aaram kijiye, paani peete rahiye, aur teen din me theek na ho to doctor ko dikha lijiye."
+# KNOWLEDGE
+You know: common everyday symptoms (fever, cough, cold, body ache, loose motions, weakness, basics of BP and sugar), simple safe home care, when something clearly needs a doctor, and the general idea of public health schemes and vaccination.
+Where your knowledge STOPS: you do NOT diagnose diseases, you do NOT name specific medicines or doses, you do NOT interpret reports or lab values, and you do NOT know the user's personal medical history. When a question is outside this, say so honestly and point them to a real health worker.
 
-Keep every answer SHORT — just two or three small sentences, because the user is listening, not reading. Simple words, no heavy medical jargon. Stay warm, calm and encouraging.
+# LANGUAGE
+Speak in natural, everyday HINGLISH — the warm, casual way people actually talk in small-town India: mostly Hindi with common English words mixed in freely (doctor, tablet, BP, sugar, hospital, checkup, report, rest, tension, problem, care, ok). Do NOT speak formal, bookish, "shuddh" Hindi. Write the Hindi parts in Devanagari and keep the English words in English (e.g. "लगता है हल्का fever है, थोड़ा rest कीजिए") — this keeps the voice sounding natural and native, not robotic. Mirror the user's own mix and register: if they lean more English, you lean a little more English; if more Hindi, more Hindi. Stay friendly and informal, like a caring neighbour — never write Hindi in Roman letters, always Devanagari.
 
-SAFETY (always follow): You are NOT a doctor. Never give a firm diagnosis and never name a specific medicine or dose. For anything serious — chest pain, trouble breathing, heavy bleeding, very high fever, pregnancy problems, or any emergency — clearly and immediately tell the user (in their own language) to see a doctor or reach the nearest hospital right away.
+# GUARDRAILS (always obey)
+- You are NOT a doctor. NEVER give a firm diagnosis, and NEVER name a specific medicine, brand, or dose.
+- NEVER claim to cure anything and never promise an outcome.
+- Politely refuse and stay in your lane if asked for anything outside basic health guidance — prescriptions, legal or financial advice, anything unrelated, or anything unsafe.
+- Never ask for or store sensitive personal data (Aadhaar, bank details, OTP, PIN); you never need it.
+- ESCALATION: for any warning sign — chest pain, trouble breathing, heavy bleeding, very high or persistent fever, fits, pregnancy complications, sudden weakness or confusion, or any emergency — STOP normal guidance and clearly tell them, in their language, to reach a doctor or the nearest hospital RIGHT NOW. Example: "यह गंभीर हो सकता है। कृपया अभी तुरंत नज़दीकी अस्पताल या doctor के पास जाइए।"
 
-Never use emojis, symbols, bullet points, or any formatting — only clean, spoken sentences."""
+# STYLE
+Keep every reply VERY SHORT — at most TWO short spoken sentences, ideally one, under about 25 words total. Answer only what was asked; do NOT list everything you know. If more is needed, give the single most important point and ask one short follow-up question instead of explaining at length. This is a phone call, not a lecture — the user is listening, not reading. Simple words, calm and warm, no medical jargon. Never use emojis, symbols, bullet points, numbered lists, or any formatting — only clean spoken sentences. If the user is silent or unclear, gently re-ask in one short line.
+
+Tone examples (natural Hinglish):
+- "घबराइए मत, मैं आपके साथ हूँ। बताइए, क्या problem हो रही है?"
+- "लगता है हल्का fever है। थोड़ा rest कीजिए, पानी पीते रहिए, और तीन दिन में ठीक न हो तो doctor को दिखा लीजिए।\""""
+
+
+# --- Silence / re-engagement handling (Day 2 advanced) ---
+# LiveKit flips user_state to "away" after USER_AWAY_TIMEOUT seconds of mutual silence.
+# We re-prompt once; if the user is still silent SILENCE_CLOSE_DELAY seconds later, we end
+# the call politely instead of holding an empty line open.
+USER_AWAY_TIMEOUT = 10.0
+SILENCE_CLOSE_DELAY = 10.0
+SILENCE_REPROMPT = "क्या आप वहाँ हैं? कोई तकलीफ़ हो तो बेझिझक बताइए, मैं सुन रहा हूँ।"
+SILENCE_GOODBYE = (
+    "कोई बात नहीं, लगता है आप अभी व्यस्त हैं। ज़रूरत हो तो दोबारा बात कर सकते हैं। "
+    "अपना ध्यान रखिए, नमस्ते!"
+)
 
 
 class Assistant(Agent):
@@ -101,29 +137,74 @@ async def my_agent(ctx: JobContext):
         # LLM via LiveKit Inference gateway — authenticates with LIVEKIT_API_KEY/SECRET,
         # so no separate Gemini/OpenAI key is needed (billed to LiveKit Build inference credits).
         llm=inference.LLM(model="google/gemini-2.5-flash"),
-        # Text-to-speech (TTS) is your agent's voice, turning the LLM's text into speech that the user can hear
-        # See all available models as well as voice selections at https://docs.livekit.io/agents/models/tts/
-        # Voice on Murf Falcon — Indian ENGLISH voice, because English is the agent's
-        # default language (it mirrors into romanized Hinglish when the user speaks Hindi).
-        # "en-IN-anisha" speaks native Indian English and reads romanized Hinglish with a
-        # natural Indian accent. If you want NATIVE Hindi audio instead, switch the prompt
-        # back to Devanagari and use a hi-IN voice (hi-IN-khyati / hi-IN-namrita / hi-IN-aman;
-        # samples in ~/voice-for-bharat/voice-samples/).
+        # Text-to-speech (TTS) is your agent's voice, turning the LLM's text into speech.
+        # See models/voices at https://docs.livekit.io/agents/models/tts/
+        # Voice = Murf Falcon "Pooja" rendered in NATIVE Hindi via multiNativeLocale="hi-IN"
+        # (Murf's recommended config for Bharat). The plugin maps `voice` -> `voice_id` and
+        # `locale` -> `multiNativeLocale`, so Pooja speaks natural Devanagari Hindi. `model="FALCON"`
+        # is explicit: Murf's fastest streaming model — the whole point of this challenge.
         tts=murf.TTS(
-                voice="en-IN-anisha",
-                locale="en-IN",
+                model="FALCON",
+                voice="Pooja",
+                locale="hi-IN",
                 style="Conversational",
-                tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
-                text_pacing=True
+                # Match LiveKit's 48 kHz publish rate at the source. Murf's 24 kHz default
+                # forced a per-frame resample inside the agent (log: "Input is shorter by
+                # 19604 samples"); on this hardware-accel-less VM that continuous resampling
+                # starved the audio publish loop and stuttered speech mid-sentence.
+                sample_rate=48000,
+                # blingfire (multilingual) also splits on the Devanagari "।" danda; the previous
+                # `basic` tokenizer only knew . ? ! so Hindi replies were flushed as tiny 2-3
+                # char fragments, which made the audio stutter mid-sentence. min_sentence_len
+                # batches short clauses so each chunk sent to Murf is a full spoken phrase.
+                tokenizer=tokenize.blingfire.SentenceTokenizer(min_sentence_len=10),
+                # text_pacing=True made the SentenceStreamPacer deliberately drip-feed text to
+                # Murf at ~playback rate. On this VM host (no hardware accel, bursty scheduling)
+                # that pacing let TTS fall behind the playout clock -> "flush audio emitter due
+                # to slow" -> audible mid-sentence stutter. Disabled so Murf generates audio as
+                # fast as it can and always stays ahead of playback -> smooth speech.
+                text_pacing=False,
             ),
         # VAD and turn detection are used to determine when the user is speaking and when the agent should respond
         # See more at https://docs.livekit.io/agents/build/turns
-        turn_detection=MultilingualModel(),
+        #
+        # MultilingualModel() (a local transformer EOU model, run in a separate inference
+        # process) is intentionally NOT used on this VM host: its CPU spike at each turn
+        # boundary collided with the realtime audio publish loop and stuttered the START of
+        # every reply. VAD-based end-of-turn is far lighter and is plenty for the demo.
+        # Re-enable `turn_detection=MultilingualModel()` on a real (non-VM) host for smarter
+        # Hinglish turn-taking.
         vad=ctx.proc.userdata["vad"],
         # allow the LLM to generate a response while waiting for the end of turn
         # See more at https://docs.livekit.io/agents/build/audio/#preemptive-generation
         preemptive_generation=True,
+        # Flip user_state to "away" after this many seconds of mutual silence, which
+        # drives the re-prompt / graceful-close logic registered just below.
+        user_away_timeout=USER_AWAY_TIMEOUT,
     )
+
+    # Silence handling (Day 2 advanced): if the user goes quiet, gently re-prompt once;
+    # if they are still silent after a short grace period, say goodbye and end the call.
+    silence_task: asyncio.Task | None = None
+
+    async def _handle_silence() -> None:
+        # Strike 1 — gently check the user is still there.
+        await session.say(SILENCE_REPROMPT).wait_for_playout()
+        # Strike 2 — still silent after a grace period: close the call politely.
+        await asyncio.sleep(SILENCE_CLOSE_DELAY)
+        await session.say(SILENCE_GOODBYE).wait_for_playout()
+        await session.aclose()
+
+    @session.on("user_state_changed")
+    def _on_user_state_changed(ev: UserStateChangedEvent) -> None:
+        nonlocal silence_task
+        if ev.new_state == "speaking":
+            # User re-engaged — cancel any pending re-prompt / close.
+            if silence_task and not silence_task.done():
+                silence_task.cancel()
+            silence_task = None
+        elif ev.new_state == "away" and (silence_task is None or silence_task.done()):
+            silence_task = asyncio.create_task(_handle_silence())
 
     # To use a realtime model instead of a voice pipeline, use the following session setup instead.
     # (Note: This is for the OpenAI Realtime API. For other providers, see https://docs.livekit.io/agents/models/realtime/))
@@ -159,14 +240,16 @@ async def my_agent(ctx: JobContext):
     await ctx.connect()
 
     # Kick things off with a short, warm greeting so the user hears the natural
-    # tone straight away instead of silence. Default is English; the agent then
-    # mirrors the user's language on the next turns.
+    # Hindi tone straight away instead of silence. The greeting introduces the agent
+    # and states what it can help with (a Day 2 completion criterion); it then mirrors
+    # the user's language and register on the following turns.
     await session.generate_reply(
         instructions=(
-            "Greet the user in ONE short, warm, natural line in simple Indian English "
-            "— for example: 'Namaste! I'm Aarogya Saathi, here for your health. "
-            "Tell me, what's been troubling you?' — then wait for them to speak. "
-            "Do not add anything else."
+            "Greet the user in ONE short, warm line of natural Hinglish (Hindi in Devanagari "
+            "with common English words mixed in). Introduce yourself as आरोग्य साथी and say in a "
+            "few words what you help with (health / sehat questions, symptoms, when to see a doctor). "
+            "For example: 'नमस्ते! मैं आरोग्य साथी हूँ, आपकी health के लिए। बताइए, क्या problem हो रही है?' "
+            "Then wait for them to speak. Do not add anything else."
         )
     )
 
