@@ -1,13 +1,16 @@
 'use client';
 
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useSessionContext } from '@livekit/components-react';
 import type { AppConfig } from '@/app-config';
-import { AgentSessionView_01 } from '@/components/agents-ui/blocks/agent-session-view-01';
+import { AarogyaChatView } from '@/components/app/aarogya-chat-view';
+import { CallEndedView } from '@/components/app/call-ended-view';
 import { WelcomeView } from '@/components/app/welcome-view';
 
 const MotionWelcomeView = motion.create(WelcomeView);
-const MotionSessionView = motion.create(AgentSessionView_01);
+const MotionSessionView = motion.create(AarogyaChatView);
+const MotionCallEndedView = motion.create(CallEndedView);
 
 const VIEW_MOTION_PROPS = {
   variants: {
@@ -33,38 +36,63 @@ interface ViewControllerProps {
 
 export function ViewController({ appConfig }: ViewControllerProps) {
   const { isConnected, start } = useSessionContext();
+  const [isStarting, setIsStarting] = useState(false);
+  const [hasEnded, setHasEnded] = useState(false);
+
+  // Detect the connected → disconnected transition so we can show an explicit
+  // "Call ended" screen instead of snapping straight back to Welcome.
+  const prevConnected = useRef(false);
+  useEffect(() => {
+    if (prevConnected.current && !isConnected) {
+      setHasEnded(true);
+    }
+    prevConnected.current = isConnected;
+  }, [isConnected]);
+
+  const handleStart = useCallback(async () => {
+    setHasEnded(false);
+    setIsStarting(true);
+    try {
+      await start();
+    } catch {
+      // Connection failed — surfaced by useAgentErrors; fall back to Welcome.
+    } finally {
+      setIsStarting(false);
+    }
+  }, [start]);
+
+  const handleHome = useCallback(() => setHasEnded(false), []);
 
   return (
     <AnimatePresence mode="wait">
-      {/* Welcome view */}
-      {!isConnected && (
+      {/* Ready / Connecting — welcome masthead */}
+      {!isConnected && !hasEnded && (
         <MotionWelcomeView
           key="welcome"
           {...VIEW_MOTION_PROPS}
           startButtonText={appConfig.startButtonText}
-          onStartCall={start}
+          onStartCall={handleStart}
+          isStarting={isStarting}
         />
       )}
-      {/* Session view — custom Aarogya Saathi chat UI */}
+
+      {/* Live session — custom Aarogya Saathi chat UI */}
       {isConnected && (
         <MotionSessionView
           key="session-view"
           {...VIEW_MOTION_PROPS}
           className="fixed inset-0"
-          preConnectMessage="Namaste! Aarogya Saathi sun raha hai — aap boliye."
           supportsChatInput={appConfig.supportsChatInput}
-          supportsVideoInput={appConfig.supportsVideoInput}
-          supportsScreenShare={appConfig.supportsScreenShare}
-          isPreConnectBufferEnabled={appConfig.isPreConnectBufferEnabled}
-          audioVisualizerType={appConfig.audioVisualizerType}
-          audioVisualizerColor={appConfig.audioVisualizerColor}
-          audioVisualizerColorShift={appConfig.audioVisualizerColorShift}
-          audioVisualizerBarCount={appConfig.audioVisualizerBarCount}
-          audioVisualizerGridRowCount={appConfig.audioVisualizerGridRowCount}
-          audioVisualizerGridColumnCount={appConfig.audioVisualizerGridColumnCount}
-          audioVisualizerRadialBarCount={appConfig.audioVisualizerRadialBarCount}
-          audioVisualizerRadialRadius={appConfig.audioVisualizerRadialRadius}
-          audioVisualizerWaveLineWidth={appConfig.audioVisualizerWaveLineWidth}
+        />
+      )}
+
+      {/* Call ended */}
+      {!isConnected && hasEnded && (
+        <MotionCallEndedView
+          key="call-ended"
+          {...VIEW_MOTION_PROPS}
+          onRestart={handleStart}
+          onHome={handleHome}
         />
       )}
     </AnimatePresence>

@@ -38,7 +38,9 @@ export const APP_CONFIG_DEFAULTS: AppConfig = {
   pageDescription:
     'Aarogya Saathi — ek Hinglish voice health helper for chhote sheher aur gaon. Symptoms samjho, home-care aur PHC guidance lo, Ayushman Bharat jaisi schemes jaano. Doctor ka replacement nahi.',
 
-  supportsChatInput: true,
+  // Voice-first: no text box / send button — sirf mic se baat. Aarogya Saathi
+  // ek voice health saathi hai, isliye default interaction voice hi hai.
+  supportsChatInput: false,
   // Voice + text only — a phone health call has no use for camera/screen-share,
   // and dropping them keeps the chat UI clean and avoids extra device prompts.
   supportsVideoInput: false,

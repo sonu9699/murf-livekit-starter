@@ -1,7 +1,16 @@
 'use client';
 
-import React, { useCallback } from 'react';
-import { ArrowDownIcon, MicIcon, MicOffIcon, PhoneOffIcon, SendHorizontalIcon } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { MediaDeviceFailure, Track } from 'livekit-client';
+import {
+  ArrowDownIcon,
+  MicIcon,
+  MicOffIcon,
+  PhoneOffIcon,
+  RotateCcwIcon,
+  SendHorizontalIcon,
+  TriangleAlertIcon,
+} from 'lucide-react';
 import {
   type AppendMessage,
   AssistantRuntimeProvider,
@@ -22,11 +31,13 @@ import {
   useVoiceAssistant,
 } from '@livekit/components-react';
 import { AgentAudioVisualizerBar } from '@/components/agents-ui/agent-audio-visualizer-bar';
-import { type OrbTone } from '@/components/app/voice-orb';
+import { AgentAudioVisualizerRadial } from '@/components/agents-ui/agent-audio-visualizer-radial';
+import { type OrbTone, VoiceOrb } from '@/components/app/voice-orb';
 import { MarkdownText } from '@/components/assistant-ui/markdown-text';
 import { Button } from '@/components/ui/button';
 import { useInputControls } from '@/hooks/agents-ui/use-agent-control-bar';
 import { cn } from '@/lib/shadcn/utils';
+import { toastAlert } from '@/lib/toast-alert';
 
 /** State tone — drives the status dot colour and the orb glow. */
 type StatusTone = OrbTone | 'muted';
@@ -194,8 +205,63 @@ function AarogyaThread({
   onSuggestion,
   onEnd,
 }: AarogyaThreadProps) {
-  const { microphoneToggle } = useInputControls({ saveUserChoices: true });
+  const [micDenied, setMicDenied] = useState(false);
+
+  // Clear, actionable messages when the browser blocks or can't open the mic.
+  const handleDeviceError = useCallback(
+    ({ source, error }: { source: Track.Source; error: Error }) => {
+      if (source !== Track.Source.Microphone) return;
+      switch (MediaDeviceFailure.getFailure(error)) {
+        case MediaDeviceFailure.PermissionDenied:
+          setMicDenied(true);
+          toastAlert({
+            variant: 'destructive',
+            title: 'Mic access band hai',
+            description:
+              'Awaaz sunane ke liye microphone chahiye. Browser ke address bar me lock/mic icon dabayein → Microphone → Allow, phir “Dobara koshish karein” par tap karein.',
+          });
+          break;
+        case MediaDeviceFailure.NotFound:
+          toastAlert({
+            variant: 'destructive',
+            title: 'Mic nahi mila',
+            description: 'Koi microphone detect nahi hua. Mic laga kar dobara koshish karein.',
+          });
+          break;
+        case MediaDeviceFailure.DeviceInUse:
+          toastAlert({
+            variant: 'destructive',
+            title: 'Mic busy hai',
+            description:
+              'Microphone kisi aur app (call ya recording) me chal raha hai. Use band karke dobara koshish karein.',
+          });
+          break;
+        default:
+          toastAlert({
+            variant: 'destructive',
+            title: 'Mic chalu nahi ho paya',
+            description: 'Kuch takneeki dikkat aa gayi. Dobara koshish karein.',
+          });
+      }
+    },
+    []
+  );
+
+  const { microphoneToggle } = useInputControls({
+    saveUserChoices: true,
+    onDeviceError: handleDeviceError,
+  });
   const micOn = microphoneToggle.enabled;
+  const isLive = state === 'listening' || state === 'thinking' || state === 'speaking';
+
+  // Once the mic is actually on, drop any lingering "denied" notice.
+  useEffect(() => {
+    if (micOn) setMicDenied(false);
+  }, [micOn]);
+
+  const retryMic = useCallback(() => {
+    void microphoneToggle.toggle(true);
+  }, [microphoneToggle]);
 
   return (
     <ThreadPrimitive.Root className="flex h-full flex-col">
@@ -204,19 +270,21 @@ function AarogyaThread({
           {/* Empty state — greeting + tap-to-ask chips */}
           <ThreadPrimitive.Empty>
             <div className="flex flex-col items-center gap-6 py-6 text-center">
-              <AgentAudioVisualizerBar
-                size="md"
-                state={state}
-                audioTrack={audioTrack}
-                barCount={5}
-                className={cn(TONE_TEXT[tone])}
-              />
+              <VoiceOrb active={isLive} tone={tone} className="size-24">
+                <AgentAudioVisualizerBar
+                  size="md"
+                  state={state}
+                  audioTrack={audioTrack}
+                  barCount={5}
+                  className={cn(TONE_TEXT[tone])}
+                />
+              </VoiceOrb>
               <div className="space-y-2">
                 <p className="font-display text-2xl leading-tight font-light tracking-tight">
                   Namaste! Main Aarogya Saathi hun.
                 </p>
                 <p className="text-muted-foreground text-sm">
-                  Boliye ya likhiye — tabiyat se judi koi bhi baat poochhiye.
+                  Mic dabaiye aur boliye — tabiyat se judi koi bhi baat poochhiye.
                 </p>
               </div>
               {supportsChatInput && (
@@ -227,7 +295,7 @@ function AarogyaThread({
                       type="button"
                       onClick={() => onSuggestion(prompt.text)}
                       className={cn(
-                        'text-foreground inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0',
+                        'text-foreground inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-[transform,border-color,background-color] duration-200 hover:-translate-y-0.5 active:translate-y-0',
                         prompt.chip
                       )}
                     >
@@ -272,57 +340,122 @@ function AarogyaThread({
         </ThreadPrimitive.ScrollToBottom>
       </ThreadPrimitive.Viewport>
 
-      {/* Composer — voice-first, pinned to the bottom */}
+      {/* Composer — pinned to the bottom */}
       <div className="from-background pointer-events-none bg-gradient-to-t to-transparent pt-6">
         <div className="pointer-events-auto mx-auto w-full max-w-2xl px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:pb-8">
-          <ComposerPrimitive.Root className="border-border bg-background focus-within:border-primary/50 flex items-end gap-2 rounded-[26px] border p-2 shadow-sm transition-colors">
-            <Button
-              type="button"
-              size="icon"
-              variant={micOn ? 'default' : 'destructive'}
-              disabled={microphoneToggle.pending}
-              onClick={() => microphoneToggle.toggle(!micOn)}
-              aria-label={micOn ? 'Mic band karein' : 'Mic chalu karein'}
-              className="size-11 shrink-0 rounded-full"
+          {/* Mic permission denied — clear, actionable recovery strip */}
+          {micDenied && (
+            <div
+              role="alert"
+              className="border-destructive/40 bg-destructive/10 text-destructive mx-auto mb-3 flex max-w-md items-center gap-3 rounded-2xl border px-4 py-3 text-sm"
             >
-              {micOn ? <MicIcon /> : <MicOffIcon />}
-            </Button>
+              <TriangleAlertIcon className="size-5 shrink-0" aria-hidden />
+              <p className="flex-1 leading-snug">
+                Mic band hai. Browser ke lock/mic icon me Microphone ko <strong>Allow</strong>{' '}
+                karein.
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                onClick={retryMic}
+                className="shrink-0 gap-1.5"
+              >
+                <RotateCcwIcon className="size-4" />
+                Dobara koshish karein
+              </Button>
+            </div>
+          )}
 
-            {supportsChatInput && (
-              <>
-                <ComposerPrimitive.Input
-                  rows={1}
-                  autoFocus
-                  enterKeyHint="send"
-                  placeholder="Yahan likhiye…"
-                  aria-label="Sandesh likhein"
-                  className="text-foreground placeholder:text-muted-foreground max-h-28 min-h-9 flex-1 resize-none bg-transparent px-1 py-2 text-[15px] leading-6 outline-none [scrollbar-width:thin]"
+          {supportsChatInput ? (
+            /* Voice + text mode — bordered composer bar */
+            <ComposerPrimitive.Root className="border-border bg-background focus-within:border-primary/50 flex items-end gap-2 rounded-[26px] border p-2 shadow-sm transition-colors">
+              <Button
+                type="button"
+                size="icon"
+                variant={micOn ? 'default' : 'destructive'}
+                disabled={microphoneToggle.pending}
+                onClick={() => microphoneToggle.toggle(!micOn)}
+                aria-label={micOn ? 'Mic band karein' : 'Mic chalu karein'}
+                className="size-11 shrink-0 rounded-full transition-transform active:scale-95"
+              >
+                {micOn ? <MicIcon /> : <MicOffIcon />}
+              </Button>
+
+              <ComposerPrimitive.Input
+                rows={1}
+                autoFocus
+                enterKeyHint="send"
+                placeholder="Yahan likhiye…"
+                aria-label="Sandesh likhein"
+                className="text-foreground placeholder:text-muted-foreground max-h-28 min-h-9 flex-1 resize-none bg-transparent px-1 py-2 text-[15px] leading-6 outline-none [scrollbar-width:thin]"
+              />
+              <ComposerPrimitive.Send asChild>
+                <Button
+                  type="button"
+                  size="icon"
+                  aria-label="Bhejein"
+                  className="size-11 shrink-0 rounded-full transition-transform active:scale-95"
+                >
+                  <SendHorizontalIcon />
+                </Button>
+              </ComposerPrimitive.Send>
+
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                onClick={onEnd}
+                aria-label="Baat band karein"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive size-11 shrink-0 rounded-full transition-transform active:scale-95"
+              >
+                <PhoneOffIcon />
+              </Button>
+            </ComposerPrimitive.Root>
+          ) : (
+            /* Voice-only — a reactive mic orb (big-LLM voice style) in the warm
+               palette: radial audio bars react to the agent's voice and animate
+               per state; the mic is the tap target and end-call is a quiet
+               secondary below it. */
+            <div className="flex flex-col items-center gap-4">
+              <div className="relative size-28">
+                <AgentAudioVisualizerRadial
+                  size="md"
+                  state={state}
+                  audioTrack={audioTrack}
+                  barCount={24}
+                  className="text-primary pointer-events-none absolute inset-0"
                 />
-                <ComposerPrimitive.Send asChild>
-                  <Button
-                    type="button"
-                    size="icon"
-                    aria-label="Bhejein"
-                    className="size-11 shrink-0 rounded-full"
-                  >
-                    <SendHorizontalIcon />
-                  </Button>
-                </ComposerPrimitive.Send>
-              </>
-            )}
+                <Button
+                  type="button"
+                  size="icon"
+                  variant={micOn ? 'default' : 'destructive'}
+                  disabled={microphoneToggle.pending}
+                  onClick={() => microphoneToggle.toggle(!micOn)}
+                  aria-label={micOn ? 'Mic band karein' : 'Mic chalu karein'}
+                  className="absolute inset-0 z-10 m-auto size-20 shrink-0 rounded-full shadow-lg transition-transform active:scale-95"
+                >
+                  {micOn ? <MicIcon className="size-7" /> : <MicOffIcon className="size-7" />}
+                </Button>
+              </div>
 
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              onClick={onEnd}
-              aria-label="Baat band karein"
-              className="text-destructive hover:bg-destructive/10 hover:text-destructive size-11 shrink-0 rounded-full"
-            >
-              <PhoneOffIcon />
-            </Button>
-          </ComposerPrimitive.Root>
-          <p className="text-muted-foreground/70 mt-2 text-center text-[0.7rem]">
+              <span className="text-muted-foreground font-mono text-[0.62rem] tracking-[0.2em] uppercase">
+                {micOn ? 'Boliye' : 'Mic band hai'}
+              </span>
+
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onEnd}
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive mt-1 h-9 gap-2 rounded-full px-4 font-mono text-[0.7rem] tracking-[0.12em] uppercase"
+              >
+                <PhoneOffIcon className="size-4" />
+                Baat band karein
+              </Button>
+            </div>
+          )}
+
+          <p className="text-muted-foreground/70 mt-4 text-center text-[0.7rem]">
             Aarogya Saathi doctor nahi hai. Kisi bhi emergency me turant nazdeeki aspataal jayein.
           </p>
         </div>

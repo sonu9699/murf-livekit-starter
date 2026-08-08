@@ -1,8 +1,8 @@
 'use client';
 
 import { memo } from 'react';
-import { MarkdownTextPrimitive } from '@assistant-ui/react-markdown';
 import remarkGfm from 'remark-gfm';
+import { MarkdownTextPrimitive } from '@assistant-ui/react-markdown';
 import { cn } from '@/lib/shadcn/utils';
 
 /**
@@ -17,7 +17,7 @@ export const MarkdownText = memo(function MarkdownText() {
       className={cn(
         'aui-md',
         '[&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
-        '[&_p]:my-0 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5'
+        '[&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-0 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5'
       )}
     />
   );

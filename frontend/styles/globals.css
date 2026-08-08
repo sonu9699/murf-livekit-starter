@@ -156,6 +156,13 @@
   * {
     @apply border-foreground/20 outline-ring/50;
   }
+  html {
+    /* Crisper type on macOS/retina — the paper theme lives or dies on the
+       display face reading like ink, not screen text. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
   body {
     @apply bg-background text-foreground;
   }
@@ -189,6 +196,16 @@
 }
 .aarogya-breathe {
   animation: aarogya-breathe 2.4s ease-in-out infinite;
+}
+
+/* Halftone ink dots — "printed almanac" texture for accent strips / blocks.
+   Compositor-cheap (static image), works on light + dark. */
+.halftone {
+  background-image: radial-gradient(
+    color-mix(in oklch, currentColor 32%, transparent) 0.7px,
+    transparent 0.8px
+  );
+  background-size: 4px 4px;
 }
 
 /* Respect the user's reduced-motion preference — kill non-essential motion. */
