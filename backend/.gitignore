@@ -11,6 +11,13 @@ KMS
 .pytest_cache
 .ruff_cache
 
+# Day 4 caller memory — holds personal data, must NEVER be committed
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+aarogya_memory.db
+
 # Claude Code
 .claude/settings.local.json
 .claude/worktrees/
