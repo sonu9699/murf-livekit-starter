@@ -78,15 +78,15 @@ export default async function RootLayout({ children }: RootLayoutProps) {
                 {companyName}
               </span>
             </div>
-            <span className="text-muted-foreground hidden font-mono text-[0.7rem] font-medium tracking-[0.2em] uppercase md:inline">
-              Bharat ka voice health saathi
-            </span>
+            <div className="flex items-center gap-4">
+              <span className="text-muted-foreground hidden font-mono text-[0.7rem] font-medium tracking-[0.2em] uppercase md:inline">
+                Bharat ka voice health saathi
+              </span>
+              <ThemeToggle className="w-auto" />
+            </div>
           </header>
 
           {children}
-          <div className="group fixed bottom-0 left-1/2 z-50 mb-[max(0.5rem,env(safe-area-inset-bottom))] -translate-x-1/2">
-            <ThemeToggle className="translate-y-0 transition-transform delay-150 duration-300 md:translate-y-20 md:group-hover:translate-y-0" />
-          </div>
         </ThemeProvider>
       </body>
     </html>
