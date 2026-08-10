@@ -33,10 +33,10 @@ export interface AppConfig {
 }
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
-  companyName: 'Aarogya Saathi',
-  pageTitle: 'Aarogya Saathi · Bharat ka voice health saathi',
+  companyName: 'Pooja',
+  pageTitle: 'Pooja · Bharat ka voice health saathi',
   pageDescription:
-    'Aarogya Saathi — ek Hinglish voice health helper for chhote sheher aur gaon. Symptoms samjho, home-care aur PHC guidance lo, Ayushman Bharat jaisi schemes jaano. Doctor ka replacement nahi.',
+    'Pooja — ek Hinglish voice health helper for chhote sheher aur gaon. Symptoms samjho, home-care aur PHC guidance lo, Ayushman Bharat jaisi schemes jaano. Doctor ka replacement nahi.',
 
   // Voice-first: no text box / send button — sirf mic se baat. Aarogya Saathi
   // ek voice health saathi hai, isliye default interaction voice hi hai.

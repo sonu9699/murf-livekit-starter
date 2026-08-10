@@ -281,7 +281,7 @@ function AarogyaThread({
               </VoiceOrb>
               <div className="space-y-2">
                 <p className="font-display text-2xl leading-tight font-light tracking-tight">
-                  Namaste! Main Aarogya Saathi hun.
+                  Namaste! Main Pooja hun.
                 </p>
                 <p className="text-muted-foreground text-sm">
                   Mic dabaiye aur boliye — tabiyat se judi koi bhi baat poochhiye.
@@ -456,7 +456,7 @@ function AarogyaThread({
           )}
 
           <p className="text-muted-foreground/70 mt-4 text-center text-[0.7rem]">
-            Aarogya Saathi doctor nahi hai. Kisi bhi emergency me turant nazdeeki aspataal jayein.
+            Pooja doctor nahi hai. Kisi bhi emergency me turant nazdeeki aspataal jayein.
           </p>
         </div>
       </div>
@@ -486,7 +486,7 @@ function AssistantMessage() {
       <SaathiAvatar className="mt-0.5 size-8 text-sm" />
       <div className="min-w-0 flex-1">
         <div className="text-muted-foreground mb-1 font-mono text-[0.65rem] tracking-[0.18em] uppercase">
-          Aarogya Saathi
+          Pooja
         </div>
         <div className="text-foreground text-[15px] leading-7 text-pretty">
           <MessagePrimitive.Parts components={{ Text: MarkdownText }} />

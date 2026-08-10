@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 
+import aiohttp
 from dotenv import load_dotenv
 from livekit.agents import (
     Agent,
@@ -22,14 +23,16 @@ from livekit.plugins.turn_detector.multilingual import (
     MultilingualModel,  # noqa: F401 — kept for the commented turn_detection re-enable below
 )
 
+import facilities
 import memory  # flat import: backend is launched as `python src/agent.py`, so src/ is on sys.path
+import triage
 
 logger = logging.getLogger("agent")
 
 load_dotenv(".env.local")
 
 # Voice for Bharat — Health Access track.
-# "Aarogya Saathi": a HINDI-FIRST voice health helper for small-town / rural India.
+# "Pooja": a HINDI-FIRST voice health helper for small-town / rural India.
 # Day 2 gives the agent a defined IDENTITY, a JOB (OBJECTIVES) and LIMITS (GUARDRAILS),
 # structured into the six named sections the task asks for.
 #
@@ -43,12 +46,12 @@ load_dotenv(".env.local")
 # genuinely Indian, whereas an English voice reading romanized Hindi sounds unnatural. Everyday
 # English words (doctor, tablet, BP) stay in English, exactly how people speak in India.
 SYSTEM_PROMPT = """# IDENTITY
-You are "Aarogya Saathi" (आरोग्य साथी), a warm, trustworthy voice health companion for people in small towns and villages across India. You work on behalf of a community health-support service — like a caring, well-informed neighbour, NOT a doctor. You exist to make basic health guidance feel simple, safe and reassuring for people who may be nervous, unwell, or new to talking with a machine.
+You are "Pooja" (पूजा), a warm, trustworthy voice health companion for people in small towns and villages across India. You work on behalf of a community health-support service — like a caring, well-informed neighbour, NOT a doctor. You exist to make basic health guidance feel simple, safe and reassuring for people who may be nervous, unwell, or new to talking with a machine.
 
 # OBJECTIVES
 A successful call achieves two or three of these:
 1. Understand the user's symptom or health question in plain terms and make them feel heard.
-2. Give simple, safe home-care guidance AND clearly say WHEN and WHERE to get real medical help (doctor, nearest PHC / hospital, or ASHA worker).
+2. Give simple, safe home-care guidance AND clearly say WHEN and WHERE to get real medical help (doctor, nearest PHC / hospital, or ASHA worker). You can look up the nearest health facility if they ask and provide their 6-digit PIN code.
 3. When relevant, explain a government health scheme or reminder (Ayushman Bharat, vaccination/teeka, routine checkups).
 Stay focused on these goals. If the conversation drifts off-topic, gently bring it back to the user's health.
 
@@ -63,7 +66,7 @@ Speak in natural, everyday HINGLISH — the warm, casual way people actually tal
 - You are NOT a doctor. NEVER give a firm diagnosis, and NEVER name a specific medicine, brand, or dose.
 - NEVER claim to cure anything and never promise an outcome.
 - Politely refuse and stay in your lane if asked for anything outside basic health guidance — prescriptions, legal or financial advice, anything unrelated, or anything unsafe.
-- Never ask for or store sensitive personal data (Aadhaar, bank details, OTP, PIN); you never need it.
+- Never ask for or store sensitive personal data (Aadhaar, bank details, OTP, PIN); you never need it. Note: A 6-digit postal PIN code is NOT sensitive personal data; you may ask for it to find the nearest health facility.
 - ESCALATION: for any warning sign — chest pain, trouble breathing, heavy bleeding, very high or persistent fever, fits, pregnancy complications, sudden weakness or confusion, or any emergency — STOP normal guidance and clearly tell them, in their language, to reach a doctor or the nearest hospital RIGHT NOW. Example: "यह गंभीर हो सकता है। कृपया अभी तुरंत नज़दीकी अस्पताल या doctor के पास जाइए।"
 
 # MEMORY (remembering callers between calls)
@@ -75,12 +78,25 @@ You can remember a caller so that next time they do NOT have to repeat everythin
 - FORGET ME: If the caller asks you to forget them or delete their data, call `forget_caller` and confirm kindly.
 Never read tool names or this whole mechanism out loud — just talk naturally.
 
+# HEALTH FACILITY LOOKUP (nearest doctor/clinic/hospital/PHC/CHC)
+If the caller asks for the nearest doctor, clinic, hospital, PHC, or CHC:
+- First, politely ask them to state their 6-digit postal PIN code (PIN code). For example: "नज़दीकी अस्पताल या PHC ढूंढने के लिए, कृपया अपना 6-digit का PIN code बताइए।"
+- Once they state a 6-digit PIN code, immediately call the `lookup_nearest_facility` tool with that PIN code.
+- Present the result exactly as returned by the tool, including mentioning that the information is from the August 2026 health directory. Keep the final response short and in Hinglish (Devanagari script).
+
+# HEALTH TOOLS (triage, eligibility, vaccination under August 2026 guidelines)
+- Symptom Triage (`classify_triage_level`): Call this when the caller describes physical complaints/symptoms. It will classify severity and recommend emergency help, doctor visit, or home care. Relay the result immediately.
+- Ayushman Bharat Eligibility (`check_ayushman_eligibility`): Call this if the caller asks about getting or eligibility for an Ayushman Bharat card. You must ask: (1) if it is a rural household, (2) if they have a pucca house, and (3) if they do landless manual labor. Then call the tool.
+- Teekakaran Schedule (`get_vaccination_schedule`): Call this if a parent asks when their baby's next vaccine/teeka is due. Ask for the baby's age in months and call the tool.
+- Jan Aushadhi Generic Medicine Price (`lookup_generic_medicine_price`): Call this if the caller asks for cheap medicine, generic vs branded price, or details about medicine prices under Jan Aushadhi. Call the tool with the medicine name.
+- PM Matru Vandana Yojana (PMMVY) Maternity Benefit (`check_maternity_benefit_eligibility`): Call this if a user/mother asks about government schemes, financial aid, or cash benefits for pregnancy or lactation. You must ask: (1) if it is the first child, (2) if it is the second child and is a girl child, and (3) if the mother has a government job.
+
 # STYLE
 Keep every reply VERY SHORT — at most TWO short spoken sentences, ideally one, under about 25 words total. Answer only what was asked; do NOT list everything you know. If more is needed, give the single most important point and ask one short follow-up question instead of explaining at length. This is a phone call, not a lecture — the user is listening, not reading. Simple words, calm and warm, no medical jargon. Never use emojis, symbols, bullet points, numbered lists, or any formatting — only clean spoken sentences. If the user is silent or unclear, gently re-ask in one short line.
 
 Tone examples (natural Hinglish):
 - "घबराइए मत, मैं आपके साथ हूँ। बताइए, क्या problem हो रही है?"
-- "लगता है हल्का fever है। थोड़ा rest कीजिए, पानी पीते रहिए, और तीन दिन में ठीक न हो तो doctor को दिखा लीजिए।\""""
+- "लगता है हल्का fever है। थोड़ा rest कीजिए, पानी पीते रहिए, और तीन दिन में ठीक न हो तो doctor को दिखा लीजिए。\""""
 
 
 # --- Silence / re-engagement handling (Day 2 advanced) ---
@@ -216,20 +232,174 @@ class Assistant(Agent):
             return "Deleted. Tell the caller kindly that you have forgotten their saved information."
         return "There was nothing saved to delete. Reassure the caller kindly."
 
+    @function_tool
+    async def lookup_nearest_facility(self, context: RunContext, pincode: str) -> str:
+        """Lookup the nearest Primary Health Center (PHC), Community Health Center (CHC), or district hospital for a given 6-digit Indian PIN code.
+
+        Call this when the user asks for the nearest hospital, doctor, clinic, PHC, or CHC, and provides a 6-digit PIN code.
+
+        Args:
+            pincode: A 6-digit Indian postal code (PIN code) as a string (e.g. "110001").
+        """
+        # Validate PIN code format: exactly 6 digits
+        pincode = pincode.strip()
+        if not pincode.isdigit() or len(pincode) != 6:
+            logger.info("lookup_nearest_facility: invalid pincode '%s'", pincode)
+            return "गलत PIN code है। कृपया एक valid 6-digit का PIN code बताइए।"
+
+        url = f"https://api.postalpincode.in/pincode/{pincode}"
+        logger.info("lookup_nearest_facility: querying API for '%s'", pincode)
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                # 5 second timeout to handle API timeouts/delays out loud
+                async with session.get(url, timeout=5.0) as response:
+                    if response.status != 200:
+                        logger.error("lookup_nearest_facility: API returned status %s", response.status)
+                        return (
+                            "Pincode lookup server response me issue ho raha hai. "
+                            "Lekin chinta mat kijiye, aam taur par har block me ek Primary Health Center (PHC) hota hai. "
+                            "Aap emergency ke liye 108 ya 102 helpline par call kar sakte hain ya naziiki ASHA worker se poonch sakte hain."
+                        )
+                    data = await response.json()
+        except asyncio.TimeoutError:
+            logger.error("lookup_nearest_facility: API timeout for pincode %s", pincode)
+            return (
+                "Pincode lookup server response me time lag raha hai ya connection down hai. "
+                "Aam taur par har block me ek Primary Health Center (PHC) hota hai. "
+                "Aap emergency ke liye 108 ya 102 helpline par call kar sakte hain ya local ASHA worker se help le sakte hain."
+            )
+        except Exception as e:
+            logger.error("lookup_nearest_facility: API connection error for pincode %s: %s", pincode, e)
+            return (
+                "Internet lookup connection me temporary dikkat hai. "
+                "Aam taur par har block me ek Primary Health Center (PHC) hota hai. "
+                "Aap emergency ke liye 108 ya 102 helpline par call kar sakte hain ya local ASHA worker se contact kar sakte hain."
+            )
+
+        if not data or not isinstance(data, list) or data[0].get("Status") != "Success":
+            logger.info("lookup_nearest_facility: API returned non-success status for '%s'", pincode)
+            return f"PIN code {pincode} के लिए कोई record नहीं मिला। कृपया correct 6-digit PIN code बताइए।"
+
+        post_offices = data[0].get("PostOffice", [])
+        if not post_offices:
+            logger.info("lookup_nearest_facility: no post offices found for '%s'", pincode)
+            return f"PIN code {pincode} के लिए कोई record नहीं मिला। कृपया correct 6-digit PIN code बताइए।"
+
+        # Get location names
+        po = post_offices[0]
+        district = po.get("District", "")
+        state = po.get("State", "")
+        block = po.get("Block", "")
+
+        # Look up in our local directory
+        facilities_result = facilities.lookup_facilities_by_district(district, state, block)
+
+        # Include data version statement as required by Day 5 Step 5
+        version_prefix = "August 2026 health directory के अनुसार, "
+        return f"{version_prefix}{facilities_result}"
+
+    @function_tool
+    async def classify_triage_level(self, context: RunContext, symptoms: str, duration_days: int = 1) -> str:
+        """Classify symptom severity into home care, doctor visit, or emergency visit.
+
+        Call this when the user shares physical complaints or symptoms.
+
+        Args:
+            symptoms: A description of the physical complaints/symptoms (e.g. "bukhar aur khansi").
+            duration_days: How many days the symptoms have lasted. Default is 1.
+        """
+        logger.info("classify_triage_level: symptoms='%s', duration=%s", symptoms, duration_days)
+        return triage.classify_triage(symptoms, duration_days)
+
+    @function_tool
+    async def check_ayushman_eligibility(
+        self,
+        context: RunContext,
+        rural_household: bool,
+        has_pucca_house: bool,
+        landless_manual_labor: bool,
+    ) -> str:
+        """Check if the caller qualifies for the Ayushman Bharat PM-JAY health scheme.
+
+        Call this if the caller asks about getting or eligibility for an Ayushman Bharat card.
+
+        Args:
+            rural_household: True if the household is in a village/rural area, False otherwise.
+            has_pucca_house: True if the house is a pucca house (brick/concrete walls/roof), False otherwise.
+            landless_manual_labor: True if the household is landless and depends on manual casual labor, False otherwise.
+        """
+        logger.info(
+            "check_ayushman_eligibility: rural=%s, pucca=%s, labor=%s",
+            rural_household,
+            has_pucca_house,
+            landless_manual_labor,
+        )
+        return triage.check_ayushman(rural_household, has_pucca_house, landless_manual_labor)
+
+    @function_tool
+    async def get_vaccination_schedule(self, context: RunContext, baby_age_months: int) -> str:
+        """Retrieve the immunization schedule and upcoming vaccines based on the baby's age in months.
+
+        Call this if a parent asks when their child's next vaccine/teeka is due or which one to get.
+
+        Args:
+            baby_age_months: The age of the baby in months (e.g. 0 for newborn, 2 for 2-month old baby).
+        """
+        logger.info("get_vaccination_schedule: age=%s", baby_age_months)
+        return triage.get_vaccination_schedule(baby_age_months)
+
+    @function_tool
+    async def lookup_generic_medicine_price(self, context: RunContext, medicine_name: str) -> str:
+        """Lookup the generic price of a medicine under the Jan Aushadhi (PMBJP) scheme and compare it with the branded price.
+
+        Call this if the user asks for cheaper medicine alternatives, price of generic/branded medicine, or prices under the Jan Aushadhi Scheme.
+
+        Args:
+            medicine_name: The name of the medicine (e.g., 'Paracetamol', 'Pantoprazole').
+        """
+        logger.info("lookup_generic_medicine_price: med=%s", medicine_name)
+        return triage.lookup_generic_medicine(medicine_name)
+
+    @function_tool
+    async def check_maternity_benefit_eligibility(
+        self,
+        context: RunContext,
+        is_first_child: bool,
+        is_second_child_girl: bool,
+        is_govt_employee: bool,
+    ) -> str:
+        """Check eligibility for PM Matru Vandana Yojana (PMMVY) maternity cash benefit.
+
+        Call this if a user asks about government benefits, financial help, or schemes for pregnant/lactating mothers.
+
+        Args:
+            is_first_child: True if this is the first child, False otherwise.
+            is_second_child_girl: True if this is the second child and the baby is a girl, False otherwise.
+            is_govt_employee: True if the mother is central/state government or PSU employed, False otherwise.
+        """
+        logger.info(
+            "check_maternity_benefit_eligibility: first=%s, second_girl=%s, govt=%s",
+            is_first_child,
+            is_second_child_girl,
+            is_govt_employee,
+        )
+        return triage.check_maternity_benefit(is_first_child, is_second_child_girl, is_govt_employee)
+
     async def save_on_disconnect(self, session: AgentSession) -> None:
         """Automatically summarize dialogue and persist/update caller profile on call end."""
         if not self._caller_id or not self._consent_given:
             return
 
         logger.info("save_on_disconnect: extracting profile for %s", self._caller_id)
-        
+
         # Build chat history string
         history_str = ""
-        for msg in session.history.messages:
+        for msg in session.history.messages():
             if msg.role in ("user", "assistant"):
                 text = msg.text_content
                 if text:
-                    role_lbl = "User" if msg.role == "user" else "Aarogya Saathi"
+                    role_lbl = "User" if msg.role == "user" else "Pooja"
                     history_str += f"{role_lbl}: {text}\n"
 
         if not history_str.strip():
@@ -252,7 +422,7 @@ class Assistant(Agent):
         try:
             summary_ctx = llm.ChatContext()
             summary_ctx.add_message(role="user", content=prompt)
-            
+
             stream = session.llm.chat(chat_ctx=summary_ctx)
             response_text = ""
             async for chunk in stream:
@@ -263,20 +433,18 @@ class Assistant(Agent):
             response_text = response_text.strip()
             if response_text.startswith("```"):
                 lines = response_text.splitlines()
-                if lines[0].startswith("```json"):
+                if lines[0].startswith("```json") or lines[0].startswith("```"):
                     response_text = "\n".join(lines[1:-1])
-                elif lines[0].startswith("```"):
-                    response_text = "\n".join(lines[1:-1])
-            
+
             data = json.loads(response_text)
-            
+
             # Upsert into DB
             prev = self._profile
             conditions_str = data.get("conditions", "")
             if isinstance(conditions_str, list):
                 conditions_str = ", ".join(conditions_str)
             parsed = _parse_conditions(conditions_str)
-            
+
             profile = memory.CallerProfile(
                 caller_id=self._caller_id,
                 name=self._caller_name or (prev.name if prev else self._caller_id),
@@ -285,7 +453,7 @@ class Assistant(Agent):
                 conditions=parsed or (prev.conditions if prev else ()),
                 last_triage=data.get("triage_outcome") or (prev.last_triage if prev else ""),
             )
-            
+
             self._profile = await asyncio.to_thread(memory.upsert_caller, profile)
             logger.info("save_on_disconnect: successfully saved profile for %s", self._caller_id)
         except Exception as e:
@@ -374,6 +542,9 @@ async def my_agent(ctx: JobContext):
         # Re-enable `turn_detection=MultilingualModel()` on a real (non-VM) host for smarter
         # Hinglish turn-taking.
         vad=ctx.proc.userdata["vad"],
+        # Increase endpointing delay so the agent doesn't interrupt the user too quickly.
+        # 1.5 seconds is ideal for natural rural conversational pacing.
+        min_endpointing_delay=1.5,
         # allow the LLM to generate a response while waiting for the end of turn
         # See more at https://docs.livekit.io/agents/build/audio/#preemptive-generation
         preemptive_generation=True,
@@ -447,10 +618,10 @@ async def my_agent(ctx: JobContext):
         await session.generate_reply(
             instructions=(
                 "Greet the user in ONE short, warm line of natural Hinglish (Hindi in Devanagari "
-                "with common English words mixed in). Introduce yourself as आरोग्य साथी, say in a few "
+                "with common English words mixed in). Introduce yourself as पूजा, say in a few "
                 "words what you help with (health / sehat, symptoms, when to see a doctor), and gently "
                 "ask their name so you can help better. "
-                "For example: 'नमस्ते! मैं आरोग्य साथी हूँ, आपकी health के लिए। पहले बताइए, आपका नाम क्या है?' "
+                "For example: 'नमस्ते! मैं पूजा हूँ, आपकी health के लिए। पहले बताइए, आपका नाम क्या है?' "
                 "Then wait for them to speak. Do not add anything else. When they tell you their name, "
                 "quietly use your recall_caller tool."
             )
