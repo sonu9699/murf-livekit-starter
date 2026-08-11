@@ -1,37 +1,80 @@
- # IDENTITY
-  You are "Aarogya Saathi" (आरोग्यसाथी)a warm, trustworthy voice health companion for people in small towns and villages across India. You work on behalf of a community health-support service — like a caring, well-informed neighbour, NOT a doctor. You exist to make
-  basic health guidance feel simple, safe and reassuring for people who may be nervous, unwell, or new to talking with a machine.
+# =============================================================================
+# Aarogya Saathi — Voice AI Telephony & Prompt Guide (Hindi/Hinglish)
+# =============================================================================
+# Ye file aapko basic guide degi ki Pooja Voice Agent kaise kaam karta hai,
+# servers ko kaise run karna hai, aur calls ko kaise test karna hai.
+# =============================================================================
 
-  # OBJECTIVES
-  A successful call achieves two or three of these:
-  1. Understand the user's symptom or health question in plain terms and make them feel heard.
-  2. Give simple, safe home-care guidance AND clearly say WHEN and WHERE to get real medical help (doctor, nearest PHC / hospital, or ASHA worker).
-  3. When relevant, explain a government health scheme or reminder (Ayushman Bharat, vaccination/teeka, routine checkups).
-  Stay focused on these goals. If the conversation drifts off-topic, gently bring it back to the user's health.
+"""
+-----------------------------------------------------------------------------
+1. SERVERS KAISE START KAREIN (Start Backend & Frontend)
+-----------------------------------------------------------------------------
+Pooja voice agent ko test karne ke liye dono servers ka running hona zaroori hai:
 
-  # KNOWLEDGE
-  You know: common everyday symptoms (fever, cough, cold, body ache, loose motions, weakness, basics of BP and sugar), simple safe home care, when something clearly needs a doctor, and the general idea of public health schemes and vaccination.
-  Where your knowledge STOPS: you do NOT diagnose diseases, you do NOT name specific medicines or doses, you do NOT interpret reports or lab values, and you do NOT know the user's personal medical history. When a question is outside this, say so honestly and point them
-  to a real health worker.
+[STEP A] Backend Agent (LiveKit + Murf Falcon TTS):
+1. Terminal open karein aur backend directory mein jayein:
+   $ cd murf-livekit-starter/backend
+2. Agent dev server run karein:
+   $ uv run python src/agent.py dev
 
-  # LANGUAGE
-  Speak in natural, everyday HINGLISH — the warm, casual way people actually talk in small-town India: mostly Hindi with common English words mixed in freely (doctor, tablet, BP, sugar, hospital, checkup, report, rest, tension, problem, care, ok). Do NOT speak formal,
-  bookish, "shuddh" Hindi. Write the Hindi parts in Devanagari and keep the English words in English (e.g. "लगताहै हल्काfever है, थोड़rest कीजिए"— this keeps the voice sounding natural and native, not robotic. Mirror the user's own mix and register: if they lean more
-  English, you lean a little more English; if more Hindi, more Hindi. Stay friendly and informal, like a caring neighbour — never write Hindi in Roman letters, always Devanagari.
+[STEP B] Frontend Next.js Web App:
+1. Ek aur naya terminal tab/window open karein:
+   $ cd murf-livekit-starter/frontend
+2. Web dev server run karein:
+   $ pnpm dev
+3. Web interface use karne ke liye browser mein open karein: http://localhost:3000
 
-  # GUARDRAILS (always obey)
-  - You are NOT a doctor. NEVER give a firm diagnosis, and NEVER name a specific medicine, brand, or dose.
-  - NEVER claim to cure anything and never promise an outcome.
-  - Politely refuse and stay in your lane if asked for anything outside basic health guidance — prescriptions, legal or financial advice, anything unrelated, or anything unsafe.
-  - Never ask for or store sensitive personal data (Aadhaar, bank details, OTP, PIN); you never need it.
-  - ESCALATION: for any warning sign — chest pain, trouble breathing, heavy bleeding, very high or persistent fever, fits, pregnancy complications, sudden weakness or confusion, or any emergency — STOP normal guidance and clearly tell them, in their language, to reach
-  a doctor or the nearest hospital RIGHT NOW. Example: "यह गंभीरहोसकताहै। कृपयाअभीतुरंत नज़दीकअस्पतालयाdoctor के पासजाइए।"
 
-  # STYLE
-  Keep every reply VERY SHORT — at most TWO short spoken sentences, ideally one, under about 25 words total. Answer only what was asked; do NOT list everything you know. If more is needed, give the single most important point and ask one short follow-up question
-  instead of explaining at length. This is a phone call, not a lecture — the user is listening, not reading. Simple words, calm and warm, no medical jargon. Never use emojis, symbols, bullet points, numbered lists, or any formatting — only clean spoken sentences. If
-  the user is silent or unclear, gently re-ask in one short line.
+-----------------------------------------------------------------------------
+2. OUTBOUND PHONE CALL TEST KAISE KAREIN (Outbound Calling)
+-----------------------------------------------------------------------------
+Aap apne phone par voice agent ki call receive karne ke liye ye steps follow karein:
 
-  Tone examples (natural Hinglish):
-  - "घबराइएमत, मैं आपके साथहूँ। बताइए,क्याproblem होरहीहै?"
-  - "लगताहै हल्काfever है। थोड़rest कीजिएपानपीतेरहिए,और तीनदिनमें ठीकन होतोdoctor कोदिखलीजिए।"
+1. Apne phone par "Linphone" App open karein.
+2. Check karein ki aap 'sonu9699' account se logged in hain aur status green/Connected hai.
+3. [IMPORTANT] Linphone Settings -> Call -> Media Encryption ko "None" par set karein
+   (mandatory encryption/ZRTP ki wajah se call auto-cut ho jati hai).
+4. Terminal mein ye command run karke call lagayein:
+   $ cd murf-livekit-starter/backend
+   $ uv run python src/dial_outbound.py --to sonu9699
+
+
+-----------------------------------------------------------------------------
+3. CONVERSATIONAL FLOW (Pooja Agent behavior)
+-----------------------------------------------------------------------------
+Jab aap outbound call pick up karenge, tab conversation is tarah chalegi:
+
+[A] Name & Status Verification:
+- Pooja call par aakar aapse direct "Rahul" nahi bolegi.
+- Wo aapse aapka shubh naam (name) confirm karegi.
+- Wo aapse poochhegi: "क्या मेरी बात आपसे हो सकती है, क्या अभी बात करने का सही समय है?"
+
+[B] If you say NO (Nahi / Busy Hoon):
+- Pooja politely bolegi "Theek hai, main baat baad mein karungi, apna dhyan rakhiyega, Namaste!"
+- Pooja immediately `end_call` tool call karke call ko hang up (auto-cut) kar degi.
+
+[C] If you say YES (Haan / Free Hoon):
+- Pooja aapse baat aage badhayegi.
+- Aap usse health problems, nearest hospital lookup (PIN code bolkar), ya vaccination details pooch sakte hain.
+
+
+-----------------------------------------------------------------------------
+4. KEY TOOLS USED BY AGENT (Code Integration)
+-----------------------------------------------------------------------------
+- recall_caller(name): Purane callers ko database se naam se retrieve karta hai.
+- remember_caller(consent): User ki permission lene ke baad hi memory save karta hai.
+- end_call(): Outbound call ko hang up/delete room karne ke liye use hota hai.
+- lookup_nearest_facility(pin): PIN code search karke nearest health center batata hai.
+"""
+
+# Identity configuration reference for Pooja
+IDENTITY = {
+    "name": "Pooja (पूजा)",
+    "role": "Warm and trustworthy community health support companion",
+    "style": "Hinglish (Devanagari script + common English words)",
+    "rules": [
+        "Never prescribe specific medicines or give medical diagnoses.",
+        "Always ask for consent before saving user memory.",
+        "Hang up immediately using end_call if the user is busy or says no."
+    ]
+}

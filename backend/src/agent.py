@@ -91,6 +91,9 @@ If the caller asks for the nearest doctor, clinic, hospital, PHC, or CHC:
 - Jan Aushadhi Generic Medicine Price (`lookup_generic_medicine_price`): Call this if the caller asks for cheap medicine, generic vs branded price, or details about medicine prices under Jan Aushadhi. Call the tool with the medicine name.
 - PM Matru Vandana Yojana (PMMVY) Maternity Benefit (`check_maternity_benefit_eligibility`): Call this if a user/mother asks about government schemes, financial aid, or cash benefits for pregnancy or lactation. You must ask: (1) if it is the first child, (2) if it is the second child and is a girl child, and (3) if the mother has a government job.
 
+# TELEPHONY / CALL CONTROL
+- If the caller says they are not free, do not want to talk, say no, or want to hang up, immediately say a short friendly goodbye in Hinglish and use the `end_call` tool to hang up the phone call.
+
 # STYLE
 Keep every reply VERY SHORT — at most TWO short spoken sentences, ideally one, under about 25 words total. Answer only what was asked; do NOT list everything you know. If more is needed, give the single most important point and ask one short follow-up question instead of explaining at length. This is a phone call, not a lecture — the user is listening, not reading. Simple words, calm and warm, no medical jargon. Never use emojis, symbols, bullet points, numbered lists, or any formatting — only clean spoken sentences. If the user is silent or unclear, gently re-ask in one short line.
 
@@ -122,14 +125,36 @@ def _parse_conditions(raw: str) -> tuple[str, ...]:
 
 
 class Assistant(Agent):
-    def __init__(self) -> None:
+    def __init__(self, ctx: JobContext | None = None) -> None:
         super().__init__(instructions=SYSTEM_PROMPT)
+        self.ctx = ctx
         # Per-call memory state. A fresh Assistant is created for every call
         # (see session.start below), so this safely holds only the current caller.
         self._caller_id: str = ""
         self._caller_name: str = ""
         self._profile: memory.CallerProfile | None = None
         self._consent_given: bool = False
+
+    @function_tool
+    async def end_call(self, context: RunContext) -> str:
+        """Hang up or end the phone call.
+
+        Use this once the conversation is finished and you have said goodbye.
+        """
+        await context.session.generate_reply(
+            instructions="Thank them for their time and say a short goodbye in Hinglish."
+        )
+
+        logger.info("Ending call")
+        if self.ctx and self.ctx.api:
+            try:
+                from livekit import api
+                await self.ctx.api.room.delete_room(
+                    api.DeleteRoomRequest(room=self.ctx.room.name)
+                )
+            except Exception as e:
+                logger.error("Failed to delete room: %s", e)
+        return "Call ended."
 
     # --- Day 4: caller memory tools -------------------------------------------
     # The LLM calls these itself (they are NOT driven from the prompt text).
@@ -556,6 +581,7 @@ async def my_agent(ctx: JobContext):
     # Silence handling (Day 2 advanced): if the user goes quiet, gently re-prompt once;
     # if they are still silent after a short grace period, say goodbye and end the call.
     silence_task: asyncio.Task | None = None
+    user_has_spoken = False
 
     async def _handle_silence() -> None:
         # Strike 1 — gently check the user is still there.
@@ -567,14 +593,16 @@ async def my_agent(ctx: JobContext):
 
     @session.on("user_state_changed")
     def _on_user_state_changed(ev: UserStateChangedEvent) -> None:
-        nonlocal silence_task
+        nonlocal silence_task, user_has_spoken
         if ev.new_state == "speaking":
+            user_has_spoken = True
             # User re-engaged — cancel any pending re-prompt / close.
             if silence_task and not silence_task.done():
                 silence_task.cancel()
             silence_task = None
         elif ev.new_state == "away" and (silence_task is None or silence_task.done()):
-            silence_task = asyncio.create_task(_handle_silence())
+            if not is_outbound or user_has_spoken:
+                silence_task = asyncio.create_task(_handle_silence())
 
     # To use a realtime model instead of a voice pipeline, use the following session setup instead.
     # (Note: This is for the OpenAI Realtime API. For other providers, see https://docs.livekit.io/agents/models/realtime/))
@@ -594,7 +622,34 @@ async def my_agent(ctx: JobContext):
     # # Start the avatar and wait for it to join
     # await avatar.start(session, room=ctx.room)
 
-    agent = Assistant()
+    agent = Assistant(ctx)
+
+    # Check if room or job metadata indicates this is an outbound call
+    is_outbound = False
+    outbound_meta = {}
+    meta_str = ctx.room.metadata or ctx.job.metadata
+    if meta_str:
+        try:
+            outbound_meta = json.loads(meta_str)
+            if outbound_meta.get("is_outbound"):
+                is_outbound = True
+        except Exception as e:
+            logger.error("Failed to parse room/job metadata: %s", e)
+
+    if is_outbound:
+        caller_name = outbound_meta.get("caller_name", "user")
+        # Pre-load profile if caller is returning
+        if caller_name:
+            caller_id = memory.normalize_name(caller_name)
+            if caller_id:
+                profile = await asyncio.to_thread(memory.get_caller, caller_id)
+                agent._caller_id = caller_id
+                agent._caller_name = caller_name
+                agent._profile = profile
+                if profile:
+                    agent._consent_given = True
+                    logger.info("Outbound: pre-loaded profile for '%s'", caller_id)
+
     try:
         # Start the session, which initializes the voice pipeline and warms up the models
         #
@@ -611,12 +666,29 @@ async def my_agent(ctx: JobContext):
         # Join the room and connect to the user
         await ctx.connect()
 
-        # Kick things off with a short, warm greeting so the user hears the natural
-        # Hindi tone straight away instead of silence. The greeting introduces the agent
-        # and states what it can help with (a Day 2 completion criterion); it then mirrors
-        # the user's language and register on the following turns.
-        await session.generate_reply(
-            instructions=(
+        # Build greeting instructions based on inbound/outbound context
+        if is_outbound:
+            scenario = outbound_meta.get("scenario", "vaccination_reminder")
+
+            if scenario == "vaccination_reminder" or scenario == "triage_followup":
+                greeting_instructions = (
+                    f"This is an OUTBOUND follow-up call. "
+                    f"Start the call by saying EXACTLY: 'नमस्ते! मैं आरोग्य साथी से पूजा बोल रही हूँ। क्या अभी आपसे बात करने का सही समय है?' "
+                    f"Do not add anything else in the first turn. Wait for their reply. "
+                    f"If they say they are not free or say no, politely say goodbye and use the end_call tool to hang up. "
+                    f"If they say yes, you must say: 'तीन दिन पहले आपको बुखार था। क्या आप डेली सुबह 9 बजे दवा ले रहे हैं या अब आपकी सेहत बिल्कुल सही हो गई है? और हाँ, आप आयुष्मान कार्ड के बारे में पूछ रहे थे, तो क्या मैं आपको बताऊँ कि इसका फायदा कैसे उठा सकते हैं?' "
+                    f"Wait for their reply. If they say yes/haan, explain the Ayushman Bharat card benefits in detail and accurately (e.g. 5 lakh rupees free treatment per family per year, cashless hospital care, apply at Jan Seva Kendra / CSC using Aadhaar)."
+                )
+            else:
+                greeting_instructions = (
+                    f"This is an OUTBOUND call. "
+                    f"Start the call by saying EXACTLY: 'नमस्ते! मैं आरोग्य साथी से पूजा बोल रही हूँ। क्या अभी आपसे बात करने का सही समय है?' "
+                    f"Do not add anything else in the first turn. Wait for their reply. "
+                    f"If they say they are not free or say no, politely say goodbye and use the end_call tool to hang up. "
+                    f"If they say yes, ask for their name, and continue the conversation normally."
+                )
+        else:
+            greeting_instructions = (
                 "Greet the user in ONE short, warm line of natural Hinglish (Hindi in Devanagari "
                 "with common English words mixed in). Introduce yourself as पूजा, say in a few "
                 "words what you help with (health / sehat, symptoms, when to see a doctor), and gently "
@@ -625,7 +697,10 @@ async def my_agent(ctx: JobContext):
                 "Then wait for them to speak. Do not add anything else. When they tell you their name, "
                 "quietly use your recall_caller tool."
             )
-        )
+
+        # Kick things off with a short, warm greeting so the user hears the natural
+        # Hindi tone straight away instead of silence.
+        await session.generate_reply(instructions=greeting_instructions)
 
         # Keep running until the room is disconnected
         while ctx.room.isconnected():
