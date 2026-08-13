@@ -120,6 +120,16 @@ Then open **http://localhost:3000** in your browser.
 
 You should now see the voice agent UI. Click **Start talking**, allow microphone access, and speak — the agent will respond with Murf Falcon TTS. Ensure your backend and (if using Option B) LiveKit server are running.
 
+### 📊 Call Analytics & Unified Admin Hub
+An Admin Hub has been built inside the `admin/` workspace to manage, track, and run outbound campaign follow-ups:
+- **Triage Analytics**: Displays key metrics including success rates, average talk times, active emergencies, and patient database counts.
+- **Visual Trends**: Features custom SVG-rendered interactive gauges, call duration bar charts, and 24-hour volume graphs.
+- **SQLite Patient Registry**: Integrates directly with the SQLite database to retrieve patient language preferences, diagnosed conditions, and the last advised home care triage.
+- **LiveKit SIP Outbound Dialer**: Forms to trigger active outbound patient check-ins and immunization follow-up campaigns.
+- **Data Control**: Actions to export call history logs as CSV files or safely reset database logs for clean testing.
+
+To access the Admin Portal locally, visit **http://localhost:3001/analytics**.
+
 ---
 
 ## Deploy

@@ -75,8 +75,20 @@ export default async function RootLayout({ children }: RootLayoutProps) {
           <header className="fixed top-0 left-0 z-50 flex w-full flex-row items-center justify-end p-4 md:p-6">
             <div className="flex items-center gap-4">
               <span className="text-muted-foreground hidden font-mono text-[0.7rem] font-medium tracking-[0.2em] uppercase md:inline">
-                Bharat ka voice health saathi
+                Aarogya Saathi - Admin Portal
               </span>
+              <Link
+                href="/escalations"
+                className="text-muted-foreground hover:text-foreground border-border/80 hover:bg-primary/10 rounded-full border px-3.5 py-1 font-mono text-[0.7rem] font-medium tracking-[0.1em] uppercase transition-colors"
+              >
+                Escalations
+              </Link>
+              <Link
+                href="/analytics"
+                className="text-muted-foreground hover:text-foreground border-border/80 hover:bg-primary/10 rounded-full border px-3.5 py-1 font-mono text-[0.7rem] font-medium tracking-[0.1em] uppercase transition-colors"
+              >
+                Analytics
+              </Link>
               <ThemeToggle className="w-auto" />
             </div>
           </header>

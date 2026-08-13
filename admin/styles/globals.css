@@ -1,0 +1,221 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@source "../node_modules/streamdown/dist/index.js";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Everett Light — editorial display face (public/everett-light.woff). */
+@font-face {
+  font-family: 'Everett';
+  src: url('/everett-light.woff') format('woff');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Aarogya Saathi — "Editorial Bharat" warm paper theme.
+   Light = cream paper + warm ink. The saffron/marigold accent is injected as
+   --primary by getStyles() from app-config `accent`. Warm hue ~55-85. */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.983 0.014 85);
+  --foreground: oklch(0.235 0.021 55);
+  --card: oklch(0.992 0.01 85);
+  --card-foreground: oklch(0.235 0.021 55);
+  --popover: oklch(0.992 0.01 85);
+  --popover-foreground: oklch(0.235 0.021 55);
+  --primary: oklch(0.68 0.16 55);
+  --primary-foreground: oklch(0.99 0.012 85);
+  --secondary: oklch(0.95 0.017 82);
+  --secondary-foreground: oklch(0.3 0.02 55);
+  --muted: oklch(0.945 0.016 82);
+  --muted-foreground: oklch(0.52 0.03 58);
+  --accent: oklch(0.93 0.032 74);
+  --accent-foreground: oklch(0.3 0.02 55);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.88 0.022 74);
+  --input: oklch(0.88 0.022 74);
+  --ring: oklch(0.68 0.16 55);
+  --chart-1: oklch(0.68 0.16 55);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.983 0.014 85);
+  --sidebar-foreground: oklch(0.235 0.021 55);
+  --sidebar-primary: oklch(0.68 0.16 55);
+  --sidebar-primary-foreground: oklch(0.99 0.012 85);
+  --sidebar-accent: oklch(0.93 0.032 74);
+  --sidebar-accent-foreground: oklch(0.3 0.02 55);
+  --sidebar-border: oklch(0.88 0.022 74);
+  --sidebar-ring: oklch(0.68 0.16 55);
+
+  /* Colour system — art-directed accents alongside the saffron primary.
+     Used as dots, borders and soft tints (not body text) so contrast holds. */
+  --teal: oklch(0.62 0.1 195);
+  --teal-foreground: oklch(0.99 0.01 195);
+  --terracotta: oklch(0.63 0.14 45);
+  --terracotta-foreground: oklch(0.99 0.01 45);
+  --indigo: oklch(0.55 0.13 265);
+  --indigo-foreground: oklch(0.99 0.01 265);
+}
+
+/* Dark = warm espresso, not neutral black. Cream ink, saffron accent. */
+.dark {
+  --background: oklch(0.19 0.016 58);
+  --foreground: oklch(0.955 0.014 85);
+  --card: oklch(0.23 0.017 58);
+  --card-foreground: oklch(0.955 0.014 85);
+  --popover: oklch(0.25 0.017 58);
+  --popover-foreground: oklch(0.955 0.014 85);
+  --primary: oklch(0.78 0.15 62);
+  --primary-foreground: oklch(0.22 0.02 55);
+  --secondary: oklch(0.28 0.017 58);
+  --secondary-foreground: oklch(0.955 0.014 85);
+  --muted: oklch(0.28 0.017 58);
+  --muted-foreground: oklch(0.74 0.022 80);
+  --accent: oklch(0.34 0.025 62);
+  --accent-foreground: oklch(0.955 0.014 85);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.78 0.15 62);
+  --chart-1: oklch(0.78 0.15 62);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.23 0.017 58);
+  --sidebar-foreground: oklch(0.955 0.014 85);
+  --sidebar-primary: oklch(0.78 0.15 62);
+  --sidebar-primary-foreground: oklch(0.22 0.02 55);
+  --sidebar-accent: oklch(0.28 0.017 58);
+  --sidebar-accent-foreground: oklch(0.955 0.014 85);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.78 0.15 62);
+
+  /* Brighter accents so they sing against the espresso background. */
+  --teal: oklch(0.75 0.11 195);
+  --teal-foreground: oklch(0.22 0.02 195);
+  --terracotta: oklch(0.74 0.13 45);
+  --terracotta-foreground: oklch(0.22 0.02 45);
+  --indigo: oklch(0.72 0.13 270);
+  --indigo-foreground: oklch(0.22 0.02 270);
+}
+
+@theme inline {
+  --font-sans:
+    var(--font-public-sans), ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+    'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-mono:
+    var(--font-commit-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+  --font-display: 'Everett', var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-teal: var(--teal);
+  --color-teal-foreground: var(--teal-foreground);
+  --color-terracotta: var(--terracotta);
+  --color-terracotta-foreground: var(--terracotta-foreground);
+  --color-indigo: var(--indigo);
+  --color-indigo-foreground: var(--indigo-foreground);
+}
+
+@layer base {
+  * {
+    @apply border-foreground/20 outline-ring/50;
+  }
+  html {
+    /* Crisper type on macOS/retina — the paper theme lives or dies on the
+       display face reading like ink, not screen text. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Subtle, art-directed motion — soft float + a breathing halo for the orb.
+   Compositor-friendly (transform + opacity only). */
+@keyframes aarogya-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes aarogya-breathe {
+  0%,
+  100% {
+    opacity: 0.32;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.1;
+    transform: scale(1.35);
+  }
+}
+
+.aarogya-float {
+  animation: aarogya-float 6s ease-in-out infinite;
+}
+.aarogya-breathe {
+  animation: aarogya-breathe 2.4s ease-in-out infinite;
+}
+
+/* Halftone ink dots — "printed almanac" texture for accent strips / blocks.
+   Compositor-cheap (static image), works on light + dark. */
+.halftone {
+  background-image: radial-gradient(
+    color-mix(in oklch, currentColor 32%, transparent) 0.7px,
+    transparent 0.8px
+  );
+  background-size: 4px 4px;
+}
+
+/* Respect the user's reduced-motion preference — kill non-essential motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

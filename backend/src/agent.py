@@ -23,6 +23,9 @@ from livekit.plugins.turn_detector.multilingual import (
     MultilingualModel,  # noqa: F401 — kept for the commented turn_detection re-enable below
 )
 
+import time
+import calls
+import escalation
 import facilities
 import memory  # flat import: backend is launched as `python src/agent.py`, so src/ is on sys.path
 import triage
@@ -65,9 +68,9 @@ Speak in natural, everyday HINGLISH — the warm, casual way people actually tal
 # GUARDRAILS (always obey)
 - You are NOT a doctor. NEVER give a firm diagnosis, and NEVER name a specific medicine, brand, or dose.
 - NEVER claim to cure anything and never promise an outcome.
-- Politely refuse and stay in your lane if asked for anything outside basic health guidance — prescriptions, legal or financial advice, anything unrelated, or anything unsafe.
+- Politely refuse and stay in your lane if asked for anything outside basic health guidance — prescriptions, legal or financial advice, anything unrelated, or anything unsafe. If they ask for a diagnosis or prescription, explain that you are an AI companion, not a doctor, but offer to escalate their request to a real doctor or senior health worker.
 - Never ask for or store sensitive personal data (Aadhaar, bank details, OTP, PIN); you never need it. Note: A 6-digit postal PIN code is NOT sensitive personal data; you may ask for it to find the nearest health facility.
-- ESCALATION: for any warning sign — chest pain, trouble breathing, heavy bleeding, very high or persistent fever, fits, pregnancy complications, sudden weakness or confusion, or any emergency — STOP normal guidance and clearly tell them, in their language, to reach a doctor or the nearest hospital RIGHT NOW. Example: "यह गंभीर हो सकता है। कृपया अभी तुरंत नज़दीकी अस्पताल या doctor के पास जाइए।"
+- ESCALATION (Day 7): for any warning sign — chest pain, trouble breathing, heavy bleeding, very high or persistent fever, fits, pregnancy complications, sudden weakness or confusion, or any emergency — STOP normal guidance immediately. You MUST tell them to reach a doctor or hospital immediately, AND ask for permission to escalate using these exact words: "क्या मैं आपकी ये जानकारी senior doctor को भेजना चाहती हूँ ताकि वे आपसे संपर्क कर सकें? क्या मुझे इसकी अनुमति है?". If they say yes, call the `create_escalation` tool. If they say no, respect it: "ठीक है, मैं नहीं भेजूँगी।" and continue with standard care guidance.
 
 # MEMORY (remembering callers between calls)
 You can remember a caller so that next time they do NOT have to repeat everything. Use your tools for this — never rely on this text to hold caller facts.
@@ -85,21 +88,22 @@ If the caller asks for the nearest doctor, clinic, hospital, PHC, or CHC:
 - Present the result exactly as returned by the tool, including mentioning that the information is from the August 2026 health directory. Keep the final response short and in Hinglish (Devanagari script).
 
 # HEALTH TOOLS (triage, eligibility, vaccination under August 2026 guidelines)
-- Symptom Triage (`classify_triage_level`): Call this when the caller describes physical complaints/symptoms. It will classify severity and recommend emergency help, doctor visit, or home care. Relay the result immediately.
+- Symptom Triage (`classify_triage_level`): Call this when the caller describes physical complaints/symptoms. It will classify severity and recommend emergency help, doctor visit, or home care. If the result indicates an Emergency or a serious warning sign (such as chest pain or trouble breathing), you MUST immediately tell them to reach a doctor or hospital AND ask for permission to escalate using the exact escalation question: "क्या मैं आपकी ये जानकारी senior doctor को भेजना चाहती हूँ ताकि वे आपसे संपर्क कर सकें? क्या मुझे इसकी अनुमति है?".
 - Ayushman Bharat Eligibility (`check_ayushman_eligibility`): Call this if the caller asks about getting or eligibility for an Ayushman Bharat card. You must ask: (1) if it is a rural household, (2) if they have a pucca house, and (3) if they do landless manual labor. Then call the tool.
 - Teekakaran Schedule (`get_vaccination_schedule`): Call this if a parent asks when their baby's next vaccine/teeka is due. Ask for the baby's age in months and call the tool.
 - Jan Aushadhi Generic Medicine Price (`lookup_generic_medicine_price`): Call this if the caller asks for cheap medicine, generic vs branded price, or details about medicine prices under Jan Aushadhi. Call the tool with the medicine name.
 - PM Matru Vandana Yojana (PMMVY) Maternity Benefit (`check_maternity_benefit_eligibility`): Call this if a user/mother asks about government schemes, financial aid, or cash benefits for pregnancy or lactation. You must ask: (1) if it is the first child, (2) if it is the second child and is a girl child, and (3) if the mother has a government job.
+- Human Help Escalation (`create_escalation`): Call this when the caller reports a red-flag symptom or asks for a diagnosis/prescription AND explicitly consents to sharing their info. You must pass caller_name, language, symptoms, urgency level (Low/Medium/High/Emergency), follow-up method (e.g. phone call), and a short summary of the check. Once called, say the reference ID (e.g. ESC-XXXX) to the caller.
 
 # TELEPHONY / CALL CONTROL
 - If the caller says they are not free, do not want to talk, say no, or want to hang up, immediately say a short friendly goodbye in Hinglish and use the `end_call` tool to hang up the phone call.
 
 # STYLE
-Keep every reply VERY SHORT — at most TWO short spoken sentences, ideally one, under about 25 words total. Answer only what was asked; do NOT list everything you know. If more is needed, give the single most important point and ask one short follow-up question instead of explaining at length. This is a phone call, not a lecture — the user is listening, not reading. Simple words, calm and warm, no medical jargon. Never use emojis, symbols, bullet points, numbered lists, or any formatting — only clean spoken sentences. If the user is silent or unclear, gently re-ask in one short line.
+Keep every reply VERY SHORT — at most TWO short spoken sentences, ideally one, under about 25 words total. (Exception: When warning the user about an emergency/warning sign and asking for escalation consent, you can use up to 4 sentences and 50 words to ensure safety and collect clear consent). Answer only what was asked; do NOT list everything you know. If more is needed, give the single most important point and ask one short follow-up question instead of explaining at length. This is a phone call, not a lecture — the user is listening, not reading. Simple words, calm and warm, no medical jargon. Never use emojis, symbols, bullet points, numbered lists, or any formatting — only clean spoken sentences. If the user is silent or unclear, gently re-ask in one short line.
 
 Tone examples (natural Hinglish):
 - "घबराइए मत, मैं आपके साथ हूँ। बताइए, क्या problem हो रही है?"
-- "लगता है हल्का fever है। थोड़ा rest कीजिए, पानी पीते रहिए, और तीन दिन में ठीक न हो तो doctor को दिखा लीजिए。\""""
+- "लगता है हल्का fever है। थोड़ा rest कीजिए, पानी पीते रहिए, और तीन दिन में ठीक न हो तो doctor को दिखा लीजिए।"""
 
 
 # --- Silence / re-engagement handling (Day 2 advanced) ---
@@ -134,6 +138,50 @@ class Assistant(Agent):
         self._caller_name: str = ""
         self._profile: memory.CallerProfile | None = None
         self._consent_given: bool = False
+
+        # Day 8 Analytics Metrics
+        self.start_time: float = time.time()
+        self.user_engaged: bool = False
+        self.triage_performed: bool = False
+        self.facility_lookup_performed: bool = False
+        self.scheme_checked: bool = False
+        self.escalated: bool = False
+
+    @function_tool
+    async def create_escalation(
+        self,
+        context: RunContext,
+        caller_name: str,
+        language: str,
+        symptoms: str,
+        urgency: str,
+        followup_method: str,
+        summary: str,
+    ) -> str:
+        """Create a human help escalation request when the caller consents to it.
+
+        Call this only when the caller has given clear permission to share their info.
+        This records the request and generates a unique reference ID.
+
+        Args:
+            caller_name: The caller's display name.
+            language: The language preference, e.g. 'Hinglish' or 'Hindi'.
+            symptoms: The symptoms or problem they reported (e.g. 'chest pain').
+            urgency: How urgent the issue is ('Low', 'Medium', 'High', or 'Emergency').
+            followup_method: How they want to be contacted (e.g. 'phone call').
+            summary: A brief summary of what happened and what the agent checked.
+        """
+        logger.info("create_escalation tool called for %s", caller_name)
+        self.escalated = True
+        ref_id = await escalation.save_escalation(
+            caller_name=caller_name,
+            language=language,
+            symptoms=symptoms,
+            urgency=urgency,
+            followup_method=followup_method,
+            summary=summary,
+        )
+        return f"Successfully created escalation request. Reference ID is: {ref_id}. Tell the user the reference ID and inform them that a doctor/health worker will call them soon."
 
     @function_tool
     async def end_call(self, context: RunContext) -> str:
@@ -318,6 +366,7 @@ class Assistant(Agent):
         block = po.get("Block", "")
 
         # Look up in our local directory
+        self.facility_lookup_performed = True
         facilities_result = facilities.lookup_facilities_by_district(district, state, block)
 
         # Include data version statement as required by Day 5 Step 5
@@ -335,6 +384,7 @@ class Assistant(Agent):
             duration_days: How many days the symptoms have lasted. Default is 1.
         """
         logger.info("classify_triage_level: symptoms='%s', duration=%s", symptoms, duration_days)
+        self.triage_performed = True
         return triage.classify_triage(symptoms, duration_days)
 
     @function_tool
@@ -360,6 +410,7 @@ class Assistant(Agent):
             has_pucca_house,
             landless_manual_labor,
         )
+        self.scheme_checked = True
         return triage.check_ayushman(rural_household, has_pucca_house, landless_manual_labor)
 
     @function_tool
@@ -372,6 +423,7 @@ class Assistant(Agent):
             baby_age_months: The age of the baby in months (e.g. 0 for newborn, 2 for 2-month old baby).
         """
         logger.info("get_vaccination_schedule: age=%s", baby_age_months)
+        self.scheme_checked = True
         return triage.get_vaccination_schedule(baby_age_months)
 
     @function_tool
@@ -384,6 +436,7 @@ class Assistant(Agent):
             medicine_name: The name of the medicine (e.g., 'Paracetamol', 'Pantoprazole').
         """
         logger.info("lookup_generic_medicine_price: med=%s", medicine_name)
+        self.scheme_checked = True
         return triage.lookup_generic_medicine(medicine_name)
 
     @function_tool
@@ -409,10 +462,47 @@ class Assistant(Agent):
             is_second_child_girl,
             is_govt_employee,
         )
+        self.scheme_checked = True
         return triage.check_maternity_benefit(is_first_child, is_second_child_girl, is_govt_employee)
 
     async def save_on_disconnect(self, session: AgentSession) -> None:
-        """Automatically summarize dialogue and persist/update caller profile on call end."""
+        """Automatically summarize dialogue and persist/update caller profile on call end, and log call analytics."""
+        # 1. Save Call Analytics (Always log every call)
+        duration = int(time.time() - self.start_time)
+        is_success = self.user_engaged and (
+            self.triage_performed or 
+            self.facility_lookup_performed or 
+            self.scheme_checked or 
+            self.escalated
+        )
+        
+        status = "success" if is_success else "failed"
+        reason = ""
+        if not is_success:
+            if not self.user_engaged:
+                reason = "Caller was silent / did not engage"
+            else:
+                reason = "Caller hung up before receiving guidance or completing a triage/scheme check"
+        else:
+            reasons = []
+            if self.triage_performed: reasons.append("Triage performed")
+            if self.facility_lookup_performed: reasons.append("Facility lookup performed")
+            if self.scheme_checked: reasons.append("Scheme eligibility checked")
+            if self.escalated: reasons.append("Escalation request created")
+            reason = "Completed: " + ", ".join(reasons)
+            
+        try:
+            calls.save_call(
+                call_id=session.room.name,
+                caller_name=self._caller_name or None,
+                status=status,
+                reason=reason,
+                duration=duration
+            )
+        except Exception as e:
+            logger.error("Failed to save call analytics on disconnect: %s", e)
+
+        # 2. Extract and Save Caller Profile (Only if name known and consent given)
         if not self._caller_id or not self._consent_given:
             return
 
@@ -493,6 +583,10 @@ def prewarm(proc: JobProcess):
     # Day 4: make sure the caller-memory DB + table exist before any call lands.
     db_path = memory.init_db()
     logger.info("caller memory ready at %s", db_path)
+    # Day 7: init escalations table
+    escalation.init_db(db_path)
+    # Day 8: init calls table
+    calls.init_db(db_path)
 
 
 server.setup_fnc = prewarm
@@ -523,6 +617,9 @@ async def my_agent(ctx: JobContext):
                 "BP", "blood pressure", "sugar", "diabetes", "pregnancy",
                 "garbhavastha", "dawai", "tablet", "injection", "teeka",
                 "vaccine", "Ayushman Bharat", "PHC", "ASHA", "doctor",
+                "chest pain", "seene me dard", "seene", "chest", "pain",
+                "saans lene me takleef", "trouble breathing", "heavy bleeding",
+                "khoon ki ulti", "vomiting blood", "emergency", "fever", "cough",
             ],
         ),
         # A Large Language Model (LLM) is your agent's brain, processing user input and generating a response
@@ -596,6 +693,7 @@ async def my_agent(ctx: JobContext):
         nonlocal silence_task, user_has_spoken
         if ev.new_state == "speaking":
             user_has_spoken = True
+            agent.user_engaged = True
             # User re-engaged — cancel any pending re-prompt / close.
             if silence_task and not silence_task.done():
                 silence_task.cancel()
