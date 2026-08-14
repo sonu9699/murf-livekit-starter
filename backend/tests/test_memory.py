@@ -85,11 +85,15 @@ def test_get_missing_returns_none(db_path: str) -> None:
 
 def test_upsert_updates_existing_row(db_path: str) -> None:
     memory.upsert_caller(
-        memory.CallerProfile(caller_id="ram", name="Ram", conditions=("cough",)), db_path
+        memory.CallerProfile(caller_id="ram", name="Ram", conditions=("cough",)),
+        db_path,
     )
     memory.upsert_caller(
         memory.CallerProfile(
-            caller_id="ram", name="Ram", conditions=("cough", "fever"), last_triage="rest"
+            caller_id="ram",
+            name="Ram",
+            conditions=("cough", "fever"),
+            last_triage="rest",
         ),
         db_path,
     )
@@ -101,7 +105,9 @@ def test_upsert_updates_existing_row(db_path: str) -> None:
 
 def test_devanagari_conditions_survive_json_roundtrip(db_path: str) -> None:
     memory.upsert_caller(
-        memory.CallerProfile(caller_id="geeta", name="Geeta", conditions=("बुखार", "खांसी")),
+        memory.CallerProfile(
+            caller_id="geeta", name="Geeta", conditions=("बुखार", "खांसी")
+        ),
         db_path,
     )
     got = memory.get_caller("geeta", db_path)

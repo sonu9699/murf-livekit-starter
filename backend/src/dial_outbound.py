@@ -3,21 +3,24 @@
 Usage:
   python src/dial_outbound.py --to <username_or_phone> --name "Rahul" --scenario vaccination_reminder --baby-age 2
 """
+
 import argparse
 import asyncio
 import json
 import os
 import sys
 import uuid
+
 from dotenv import load_dotenv
 from livekit import api
 
 # Load environment variables
 load_dotenv(".env.local")
 
+
 def format_sip_recipient(raw: str) -> str:
     cleaned = raw.strip()
-    
+
     # Check if it looks like a standard E.164 phone number
     if cleaned.startswith("+") or (cleaned.isdigit() and len(cleaned) >= 7):
         if cleaned.startswith("+"):
@@ -26,32 +29,35 @@ def format_sip_recipient(raw: str) -> str:
 
     # If it is a full SIP URI, extract the username part
     if cleaned.startswith("sip:"):
-        cleaned = cleaned[len("sip:"):]
+        cleaned = cleaned[len("sip:") :]
     if "@" in cleaned:
         cleaned = cleaned.split("@")[0]
 
     # Return only the SIP user/username as expected by LiveKit
     return cleaned
 
+
 async def main():
     parser = argparse.ArgumentParser(description="Dial outbound voice AI helper call")
     parser.add_argument(
         "--to",
         required=True,
-        help="Recipient phone number (e.g. +91XXXXXXXXXX) or SIP username/address (e.g. myuser)"
+        help="Recipient phone number (e.g. +91XXXXXXXXXX) or SIP username/address (e.g. myuser)",
     )
-    parser.add_argument("--name", default="Rahul", help="Recipient name (default: Rahul)")
+    parser.add_argument(
+        "--name", default="Rahul", help="Recipient name (default: Rahul)"
+    )
     parser.add_argument(
         "--scenario",
         choices=["vaccination_reminder", "triage_followup"],
         default="vaccination_reminder",
-        help="Outbound scenario"
+        help="Outbound scenario",
     )
     parser.add_argument(
         "--baby-age",
         type=int,
         default=2,
-        help="Baby's age in months (only for vaccination_reminder, default: 2)"
+        help="Baby's age in months (only for vaccination_reminder, default: 2)",
     )
     args = parser.parse_args()
 
@@ -62,11 +68,13 @@ async def main():
         "LIVEKIT_URL",
         "LIVEKIT_API_KEY",
         "LIVEKIT_API_SECRET",
-        "LIVEKIT_SIP_OUTBOUND_TRUNK_ID"
+        "LIVEKIT_SIP_OUTBOUND_TRUNK_ID",
     ]
     missing = [var for var in required if not os.getenv(var)]
     if missing:
-        print(f"Error: Missing required environment variables in .env.local: {', '.join(missing)}")
+        print(
+            f"Error: Missing required environment variables in .env.local: {', '.join(missing)}"
+        )
         print("Please check your .env.local file configuration.")
         sys.exit(1)
 
@@ -84,28 +92,23 @@ async def main():
         "caller_name": args.name,
         "phone": recipient,
         "scenario": args.scenario,
-        "baby_age_months": args.baby_age
+        "baby_age_months": args.baby_age,
     }
     metadata_str = json.dumps(metadata)
 
-    print(f"Connecting to LiveKit server...")
+    print("Connecting to LiveKit server...")
     lkapi = api.LiveKitAPI(url=url, api_key=api_key, api_secret=api_secret)
 
     try:
         print(f"Creating LiveKit room: {room_name}")
         await lkapi.room.create_room(
-            api.CreateRoomRequest(
-                name=room_name,
-                metadata=metadata_str
-            )
+            api.CreateRoomRequest(name=room_name, metadata=metadata_str)
         )
 
-        print(f"Dispatching 'my-agent' to room...")
+        print("Dispatching 'my-agent' to room...")
         await lkapi.agent_dispatch.create_dispatch(
             api.CreateAgentDispatchRequest(
-                agent_name="my-agent",
-                room=room_name,
-                metadata=metadata_str
+                agent_name="my-agent", room=room_name, metadata=metadata_str
             )
         )
 
@@ -129,6 +132,7 @@ async def main():
         sys.exit(1)
     finally:
         await lkapi.aclose()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

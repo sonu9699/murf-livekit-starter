@@ -8,17 +8,31 @@ import re
 
 # High-risk symptoms for RED triage level (emergency)
 _RED_KEYWORDS = [
-    r"saans.*takleef", r"saans.*phool", r"trouble.*breath", r"breath",
-    r"chest.*pain", r"seene.*dard", r"blood", r"khoon", r"bleeding",
-    r"paralysis", r"lakwa", r"fits", r"daura", r"unconscious", r"behosh",
-    r"pregnancy", r"delivery"
+    r"saans.*takleef",
+    r"saans.*phool",
+    r"trouble.*breath",
+    r"breath",
+    r"chest.*pain",
+    r"seene.*dard",
+    r"blood",
+    r"khoon",
+    r"bleeding",
+    r"paralysis",
+    r"lakwa",
+    r"fits",
+    r"daura",
+    r"unconscious",
+    r"behosh",
+    r"pregnancy",
+    r"delivery",
 ]
 
 _RED_RE = re.compile("|".join(_RED_KEYWORDS), re.IGNORECASE)
 
+
 def classify_triage(symptoms: str, duration_days: int) -> str:
     """Classify user symptoms to RED, YELLOW, or GREEN triage level.
-    
+
     Returns Hinglish advice based on August 2026 health guidelines.
     """
     if not symptoms:
@@ -36,10 +50,17 @@ def classify_triage(symptoms: str, duration_days: int) -> str:
     # Check YELLOW level (Persistent/moderate symptoms)
     # E.g. fever for more than 3 days, or sugar/BP complications
     is_moderate = (
-        "fever" in clean_symptoms or "bukhar" in clean_symptoms or "ताप" in clean_symptoms
+        "fever" in clean_symptoms
+        or "bukhar" in clean_symptoms
+        or "ताप" in clean_symptoms
     ) and duration_days >= 3
 
-    if is_moderate or "sugar" in clean_symptoms or "bp" in clean_symptoms or "blood pressure" in clean_symptoms:
+    if (
+        is_moderate
+        or "sugar" in clean_symptoms
+        or "bp" in clean_symptoms
+        or "blood pressure" in clean_symptoms
+    ):
         return (
             "August 2026 guidelines के अनुसार, आपको doctor को दिखाना चाहिए। "
             "कृपया 1-2 दिन में नज़दीकी PHC या clinic जाकर checkup करवा लें।"
@@ -51,9 +72,12 @@ def classify_triage(symptoms: str, duration_days: int) -> str:
         "भरपूर आराम करें, पानी या ORS घोल पीते रहें, और आराम न मिलने पर doctor से मिलें।"
     )
 
-def check_ayushman(rural_household: bool, has_pucca_house: bool, landless_manual_labor: bool) -> str:
+
+def check_ayushman(
+    rural_household: bool, has_pucca_house: bool, landless_manual_labor: bool
+) -> str:
     """Check Ayushman Bharat PM-JAY eligibility based on rural deprivation criteria.
-    
+
     Returns Hinglish information based on August 2026 guidelines.
     """
     # Eligibility criteria: rural household with landless manual labor, OR no pucca house
@@ -68,9 +92,10 @@ def check_ayushman(rural_household: bool, has_pucca_house: bool, landless_manual
             "अधिक जानकारी के लिए toll-free number 14555 पर call करें या CSC center पर check करवाएँ।"
         )
 
+
 def get_vaccination_schedule(baby_age_months: int) -> str:
     """Determine upcoming vaccines from India UIP based on baby age in months.
-    
+
     Returns Hinglish recommendation based on August 2026 immunization schedule.
     """
     if baby_age_months < 0:
@@ -151,27 +176,30 @@ GENERIC_MEDICINES = {
         "generic_price": "₹40-50",
         "usage": "बैक्टीरियल इन्फेक्शन या एंटीबायोटिक (Bacterial infection/Antibiotic)",
         "brands": ["amoxicillin", "amoxil", "mox"],
-    }
+    },
 }
+
 
 def lookup_generic_medicine(medicine_name: str) -> str:
     """Compare branded medicine price with generic Jan Aushadhi price.
-    
+
     Returns Hinglish information based on August 2026 guidelines.
     """
     if not medicine_name:
         return "कृपया दवाई का नाम बताइए ताकि मैं उसका generic विकल्प ढूंढ सकूँ।"
-    
+
     # Normalize medicine name
     name_clean = medicine_name.lower().strip()
-    
+
     # Matching against keys and brand lists
     matched_key = None
     for key, med in GENERIC_MEDICINES.items():
-        if key in name_clean or any(brand in name_clean for brand in med.get("brands", [])):
+        if key in name_clean or any(
+            brand in name_clean for brand in med.get("brands", [])
+        ):
             matched_key = key
             break
-            
+
     if matched_key:
         med = GENERIC_MEDICINES[matched_key]
         return (
@@ -185,9 +213,12 @@ def lookup_generic_medicine(medicine_name: str) -> str:
             f"लेकिन आप नज़दीकी प्रधानमंत्री जन औषधि केंद्र (Jan Aushadhi Kendra) पर जाकर 50% से 90% तक की बचत कर सकते हैं।"
         )
 
-def check_maternity_benefit(is_first_child: bool, is_second_child_girl: bool, is_govt_employee: bool) -> str:
+
+def check_maternity_benefit(
+    is_first_child: bool, is_second_child_girl: bool, is_govt_employee: bool
+) -> str:
     """Check eligibility for PM Matru Vandana Yojana (PMMVY) maternity benefit.
-    
+
     Returns Hinglish information based on August 2026 guidelines.
     """
     if is_govt_employee:
@@ -195,7 +226,7 @@ def check_maternity_benefit(is_first_child: bool, is_second_child_girl: bool, is
             "August 2026 PMMVY guidelines के अनुसार, सरकारी नौकरी वाले (Central/State Govt or PSU) "
             "कर्मचारी इस योजना के लिए eligible नहीं हैं क्योंकि उन्हें paid maternity leave मिलती है।"
         )
-        
+
     if is_first_child:
         return (
             "August 2026 guidelines के अनुसार, पहले बच्चे के जन्म पर PM Matru Vandana Yojana (PMMVY) "
@@ -211,4 +242,3 @@ def check_maternity_benefit(is_first_child: bool, is_second_child_girl: bool, is
             "August 2026 guidelines के अनुसार, PMMVY का लाभ केवल पहले बच्चे के लिए, "
             "या दूसरे बच्चे के लड़की होने पर ही मिलता है। अधिक जानकारी के लिए आंगनवाड़ी कार्यकर्ता से संपर्क करें।"
         )
-

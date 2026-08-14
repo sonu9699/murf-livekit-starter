@@ -15,6 +15,7 @@ def test_normalize_key():
     assert facilities.normalize_key("  Gaya  ") == "gaya"
     assert facilities.normalize_key("") == ""
 
+
 def test_lookup_facilities_by_district_matched():
     # Patna is in our directory
     res = facilities.lookup_facilities_by_district("Patna", "Bihar", "Phulwari Sharif")
@@ -23,13 +24,17 @@ def test_lookup_facilities_by_district_matched():
     assert "PHC Phulwari Sharif" in res
     assert "PMCH" in res
 
+
 def test_lookup_facilities_by_district_fallback():
     # Basti is not in our directory
-    res = facilities.lookup_facilities_by_district("Basti", "Uttar Pradesh", "Basti Block")
+    res = facilities.lookup_facilities_by_district(
+        "Basti", "Uttar Pradesh", "Basti Block"
+    )
     assert "Basti" in res
     assert "specific local hospital details" in res
     assert "108" in res
     assert "102" in res
+
 
 @pytest.mark.asyncio
 async def test_lookup_nearest_facility_invalid_pin():
@@ -44,6 +49,7 @@ async def test_lookup_nearest_facility_invalid_pin():
     res = await assistant.lookup_nearest_facility(context_mock, "12345a")
     assert "गलत PIN code है" in res
 
+
 class MockResponse:
     def __init__(self, status, data):
         self.status = status
@@ -57,6 +63,7 @@ class MockResponse:
 
     async def json(self):
         return self._data
+
 
 class MockSession:
     def __init__(self, response=None, get_side_effect=None):
@@ -74,6 +81,7 @@ class MockSession:
             raise self.get_side_effect
         return self.response
 
+
 @pytest.mark.asyncio
 async def test_lookup_nearest_facility_api_success():
     assistant = Assistant()
@@ -85,12 +93,8 @@ async def test_lookup_nearest_facility_api_success():
             "Status": "Success",
             "Message": "Number of pincode(s) found:1",
             "PostOffice": [
-                {
-                    "District": "Patna",
-                    "State": "Bihar",
-                    "Block": "Phulwari Sharif"
-                }
-            ]
+                {"District": "Patna", "State": "Bihar", "Block": "Phulwari Sharif"}
+            ],
         }
     ]
 
@@ -101,6 +105,7 @@ async def test_lookup_nearest_facility_api_success():
         assert "August 2026 health directory" in res
         assert "Patna" in res
         assert "PHC Phulwari Sharif" in res
+
 
 @pytest.mark.asyncio
 async def test_lookup_nearest_facility_api_timeout():
@@ -114,10 +119,13 @@ async def test_lookup_nearest_facility_api_timeout():
         assert "Pincode lookup server response me time lag raha hai" in res
         assert "108" in res
 
+
 # --- Day 5 Expanded Tools Tests ---
+
 
 def test_triage_classification():
     import triage
+
     # RED emergency
     res_red = triage.classify_triage("seene me dard aur saans lene me dikkat", 1)
     assert "Emergency" in res_red
@@ -134,24 +142,34 @@ def test_triage_classification():
     assert "mild symptom" in res_green
     assert "ORS" in res_green
 
+
 def test_ayushman_eligibility():
     import triage
+
     # Eligible (rural + landless labor)
-    eligible = triage.check_ayushman(rural_household=True, has_pucca_house=True, landless_manual_labor=True)
+    eligible = triage.check_ayushman(
+        rural_household=True, has_pucca_house=True, landless_manual_labor=True
+    )
     assert "eligible हो सकते हैं" in eligible
     assert "5 लाख" in eligible
 
     # Eligible (rural + no pucca house)
-    eligible_kucha = triage.check_ayushman(rural_household=True, has_pucca_house=False, landless_manual_labor=False)
+    eligible_kucha = triage.check_ayushman(
+        rural_household=True, has_pucca_house=False, landless_manual_labor=False
+    )
     assert "eligible हो सकते हैं" in eligible_kucha
 
     # Not match
-    not_eligible = triage.check_ayushman(rural_household=False, has_pucca_house=True, landless_manual_labor=False)
+    not_eligible = triage.check_ayushman(
+        rural_household=False, has_pucca_house=True, landless_manual_labor=False
+    )
     assert "criteria match नहीं हुआ" in not_eligible
     assert "14555" in not_eligible
 
+
 def test_vaccination_schedule():
     import triage
+
     # Birth
     v_birth = triage.get_vaccination_schedule(0)
     assert "BCG" in v_birth
@@ -168,20 +186,27 @@ def test_vaccination_schedule():
     v_old = triage.get_vaccination_schedule(36)
     assert "basic childhood vaccines complete" in v_old
 
+
 @pytest.mark.asyncio
 async def test_agent_health_tools():
     assistant = Assistant()
     context_mock = MagicMock()
 
     # Test triage tool calling
-    res_triage = await assistant.classify_triage_level(context_mock, "seene me bahut tez dard hai", 1)
+    res_triage = await assistant.classify_triage_level(
+        context_mock, "seene me bahut tez dard hai", 1
+    )
     assert "Emergency" in res_triage
 
     # Test Ayushman tool calling
-    res_ayushman = await assistant.check_ayushman_eligibility(context_mock, rural_household=True, has_pucca_house=False, landless_manual_labor=False)
+    res_ayushman = await assistant.check_ayushman_eligibility(
+        context_mock,
+        rural_household=True,
+        has_pucca_house=False,
+        landless_manual_labor=False,
+    )
     assert "eligible हो सकते हैं" in res_ayushman
 
     # Test vaccination tool calling
     res_vaccine = await assistant.get_vaccination_schedule(context_mock, 0)
     assert "BCG" in res_vaccine
-

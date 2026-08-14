@@ -10,6 +10,7 @@ import re
 # Normalization regex for cleaning district names
 _CLEAN_RE = re.compile(r"[^a-z0-9]+")
 
+
 def normalize_key(name: str) -> str:
     """Normalize a name to a stable lookup key (lowercase, letters/numbers only)."""
     if not name:
@@ -19,8 +20,9 @@ def normalize_key(name: str) -> str:
     # Strip common suffixes that the pincode API might add, e.g., "district"
     for suffix in (" district", " rural", " urban"):
         if val.endswith(suffix):
-            val = val[:-len(suffix)]
+            val = val[: -len(suffix)]
     return _CLEAN_RE.sub("", val)
+
 
 # Realistic health facility data for representative districts in India.
 # This serves as our local database (August 2026 directory).
@@ -44,7 +46,7 @@ FACILITIES_DIRECTORY = {
             "type": "District/State Hospital",
             "address": "Ashok Rajpath, Patna, Bihar",
             "phone": "0612-2300080",
-        }
+        },
     ],
     "gaya": [
         {
@@ -58,7 +60,7 @@ FACILITIES_DIRECTORY = {
             "type": "District Hospital",
             "address": "Sherghati Road, Gaya, Bihar",
             "phone": "0631-2222049",
-        }
+        },
     ],
     "muzaffarpur": [
         {
@@ -72,7 +74,7 @@ FACILITIES_DIRECTORY = {
             "type": "District Hospital",
             "address": "Umanagar, Muzaffarpur, Bihar",
             "phone": "0621-2230460",
-        }
+        },
     ],
     # UTTAR PRADESH
     "lucknow": [
@@ -93,7 +95,7 @@ FACILITIES_DIRECTORY = {
             "type": "District Hospital",
             "address": "Vibhuti Khand, Gomti Nagar, Lucknow, UP",
             "phone": "0522-2307520",
-        }
+        },
     ],
     "varanasi": [
         {
@@ -113,7 +115,7 @@ FACILITIES_DIRECTORY = {
             "type": "District Hospital",
             "address": "Pandeypur, Varanasi, UP",
             "phone": "0542-2586252",
-        }
+        },
     ],
     "gorakhpur": [
         {
@@ -133,7 +135,7 @@ FACILITIES_DIRECTORY = {
             "type": "District Hospital",
             "address": "Gorakhpur Road, Gorakhpur, UP",
             "phone": "0551-2501755",
-        }
+        },
     ],
     # RAJASTHAN
     "jaipur": [
@@ -154,7 +156,7 @@ FACILITIES_DIRECTORY = {
             "type": "District Hospital",
             "address": "JLN Marg, Jaipur, Rajasthan",
             "phone": "0141-2560291",
-        }
+        },
     ],
     # MADHYA PRADESH
     "bhopal": [
@@ -175,7 +177,7 @@ FACILITIES_DIRECTORY = {
             "type": "District Hospital",
             "address": "Near Taj-ul-Masajid, Bhopal, MP",
             "phone": "0755-4003000",
-        }
+        },
     ],
     # MAHARASHTRA
     "pune": [
@@ -196,7 +198,7 @@ FACILITIES_DIRECTORY = {
             "type": "District Hospital",
             "address": "Near Pune Station, Pune, Maharashtra",
             "phone": "020-26128000",
-        }
+        },
     ],
     # JHARKHAND
     "ranchi": [
@@ -217,13 +219,16 @@ FACILITIES_DIRECTORY = {
             "type": "District Hospital",
             "address": "Bariatu, Ranchi, Jharkhand",
             "phone": "0651-2541533",
-        }
-    ]
+        },
+    ],
 }
 
-def lookup_facilities_by_district(district: str, state: str = "", block: str = "") -> str:
+
+def lookup_facilities_by_district(
+    district: str, state: str = "", block: str = ""
+) -> str:
     """Lookup facilities in the given district and return a Hinglish spoken summary.
-    
+
     If the district is not in the directory, returns a helpful fallback using
     the resolved district/state/block.
     """
@@ -243,14 +248,32 @@ def lookup_facilities_by_district(district: str, state: str = "", block: str = "
     if facilities:
         # Format the facilities list. Keep it short so it fits in a couple of sentences.
         # We will list one primary center (PHC/CHC) and the main hospital.
-        phc_chc = next((f for f in facilities if f["type"] in ("Primary Health Center", "Community Health Center")), None)
-        hospital = next((f for f in facilities if f["type"] == "District Hospital" or "Hospital" in f["name"]), None)
+        phc_chc = next(
+            (
+                f
+                for f in facilities
+                if f["type"] in ("Primary Health Center", "Community Health Center")
+            ),
+            None,
+        )
+        hospital = next(
+            (
+                f
+                for f in facilities
+                if f["type"] == "District Hospital" or "Hospital" in f["name"]
+            ),
+            None,
+        )
 
         reply_parts = []
         if phc_chc:
-            reply_parts.append(f"नज़दीकी local center {phc_chc['name']} है (Phone: {phc_chc['phone']})")
+            reply_parts.append(
+                f"नज़दीकी local center {phc_chc['name']} है (Phone: {phc_chc['phone']})"
+            )
         if hospital:
-            reply_parts.append(f"बड़ा अस्पताल {hospital['name']} है (Phone: {hospital['phone']})")
+            reply_parts.append(
+                f"बड़ा अस्पताल {hospital['name']} है (Phone: {hospital['phone']})"
+            )
 
         facilities_summary = " और ".join(reply_parts)
         return f"{location_desc} में, {facilities_summary}।"

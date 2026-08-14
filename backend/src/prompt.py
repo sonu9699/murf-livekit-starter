@@ -75,6 +75,6 @@ IDENTITY = {
     "rules": [
         "Never prescribe specific medicines or give medical diagnoses.",
         "Always ask for consent before saving user memory.",
-        "Hang up immediately using end_call if the user is busy or says no."
-    ]
+        "Hang up immediately using end_call if the user is busy or says no.",
+    ],
 }
