@@ -1,66 +1,10 @@
 [
   {
-    "id": "voice_assistant_room_381",
-    "caller_name": null,
+    "id": "test_room_sync",
+    "caller_name": "Sita Devi",
     "status": "failed",
-    "reason": "Caller hung up before receiving guidance or completing a triage/scheme check",
-    "duration": 90,
-    "created_at": "2026-08-14T17:26:46+00:00"
-  },
-  {
-    "id": "call_session_101",
-    "caller_name": "Sunita Sharma",
-    "status": "success",
-    "reason": "Completed: Mild fever consultation and home care PCM advice provided.",
-    "duration": 95,
-    "created_at": "2026-08-13T15:05:29.807278+00:00"
-  },
-  {
-    "id": "call_session_102",
-    "caller_name": "Ramesh Patel",
-    "status": "success",
-    "reason": "Emergency: Chest pain triage. Automated doctor referral generated.",
-    "duration": 145,
-    "created_at": "2026-08-13T13:05:29.807278+00:00"
-  },
-  {
-    "id": "call_session_103",
-    "caller_name": null,
-    "status": "failed",
-    "reason": "Caller was silent / did not engage on connection.",
-    "duration": 7,
-    "created_at": "2026-08-13T12:05:29.807278+00:00"
-  },
-  {
-    "id": "call_session_104",
-    "caller_name": "Karan Singh",
-    "status": "success",
-    "reason": "Completed: Outbound vaccination reminder campaign check-in.",
-    "duration": 65,
-    "created_at": "2026-08-13T11:05:29.807278+00:00"
-  },
-  {
-    "id": "call_session_105",
-    "caller_name": "Meera Devi",
-    "status": "success",
-    "reason": "Completed: High BP check-in. Medication compliance confirmed.",
-    "duration": 110,
-    "created_at": "2026-08-13T07:05:29.807278+00:00"
-  },
-  {
-    "id": "call_session_106",
-    "caller_name": "Rahul Verma",
-    "status": "success",
-    "reason": "Completed: Mild wheezing query. Inhaler dosage guide given.",
-    "duration": 80,
-    "created_at": "2026-08-13T05:05:29.807278+00:00"
-  },
-  {
-    "id": "call_session_107",
-    "caller_name": null,
-    "status": "failed",
-    "reason": "Call dropped early by user before welcome greeting.",
+    "reason": "Caller was silent / did not engage",
     "duration": 12,
-    "created_at": "2026-08-13T02:05:29.807278+00:00"
+    "created_at": "2026-08-15T18:24:59+00:00"
   }
 ]
